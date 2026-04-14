@@ -1479,27 +1479,31 @@ var welcomeCloseBtn = document.querySelector('.welcome-modal-close');
 
 // 欢迎弹窗逻辑
 function initWelcomeModal() {
+  // 强制显示弹窗测试
+  console.log('initWelcomeModal called');
+  welcomeModal.classList.add('visible');
+  
   // 检查日期（20260414 - 20260415）
-  var today = new Date();
-  var todayStr = today.getFullYear() + 
-                String(today.getMonth() + 1).padStart(2, '0') + 
-                String(today.getDate()).padStart(2, '0');
-  
-  var startDate = '20260414';
-  var endDate = '20260415';
-  
-  // 检查是否在显示日期范围内
-  if (todayStr >= startDate && todayStr <= endDate) {
-    // 检查今天是否已经显示过
-    var lastShownDate = localStorage.getItem('welcomeModalLastShown');
-    if (lastShownDate !== todayStr) {
-      // 显示弹窗
-      welcomeModal.classList.add('visible');
-      
-      // 标记今天已显示
-      localStorage.setItem('welcomeModalLastShown', todayStr);
-    }
-  }
+  // var today = new Date();
+  // var todayStr = today.getFullYear() + 
+  //               String(today.getMonth() + 1).padStart(2, '0') + 
+  //               String(today.getDate()).padStart(2, '0');
+  // 
+  // var startDate = '20260414';
+  // var endDate = '20260415';
+  // 
+  // // 检查是否在显示日期范围内
+  // if (todayStr >= startDate && todayStr <= endDate) {
+  //   // 检查今天是否已经显示过
+  //   var lastShownDate = localStorage.getItem('welcomeModalLastShown');
+  //   if (lastShownDate !== todayStr) {
+  //     // 显示弹窗
+  //     welcomeModal.classList.add('visible');
+  //     
+  //     // 标记今天已显示
+  //     localStorage.setItem('welcomeModalLastShown', todayStr);
+  //   }
+  // }
 }
 
 // 关闭弹窗
@@ -1840,16 +1844,18 @@ function renderBgPalette() {
     var allColors = themeColors.concat(savedColors);
     var displayCount = Math.min(5, allColors.length);
     
-    for (let i = 0; i < displayCount; i++) {
-      let c = allColors[i];
-      let swatch = document.createElement('div');
-      swatch.className = 'palette-swatch';
-      swatch.style.background = 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
-      swatch.addEventListener('click', function() {
-        selectBgFromAll(i);
-        updatePaletteSelection(i);
-      });
-      row.appendChild(swatch);
+    for (var i = 0; i < displayCount; i++) {
+      (function(index) {
+        var c = allColors[index];
+        var swatch = document.createElement('div');
+        swatch.className = 'palette-swatch';
+        swatch.style.background = 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
+        swatch.addEventListener('click', function() {
+          selectBgFromAll(index);
+          updatePaletteSelection(index);
+        });
+        row.appendChild(swatch);
+      })(i);
     }
   } else {
     // Auto-generated gradients + user saved gradients
@@ -1858,18 +1864,20 @@ function renderBgPalette() {
     var allGradients = autoGradients.concat(savedGradients);
     // Show up to 5 gradients total
     var displayCount = Math.min(5, allGradients.length);
-    for (let i = 0; i < displayCount; i++) {
-      let g = allGradients[i];
-      let swatch = document.createElement('div');
-      swatch.className = 'palette-swatch gradient-swatch';
-      // Use CSS custom properties for gradient colors
-      swatch.style.setProperty('--g-start', 'rgb(' + g.start.r + ',' + g.start.g + ',' + g.start.b + ')');
-      swatch.style.setProperty('--g-end', 'rgb(' + g.end.r + ',' + g.end.g + ',' + g.end.b + ')');
-      swatch.addEventListener('click', function() {
-        selectGradient(g, i);
-        updateGradientSelection(i);
-      });
-      row.appendChild(swatch);
+    for (var i = 0; i < displayCount; i++) {
+      (function(index) {
+        var g = allGradients[index];
+        var swatch = document.createElement('div');
+        swatch.className = 'palette-swatch gradient-swatch';
+        // Use CSS custom properties for gradient colors
+        swatch.style.setProperty('--g-start', 'rgb(' + g.start.r + ',' + g.start.g + ',' + g.start.b + ')');
+        swatch.style.setProperty('--g-end', 'rgb(' + g.end.r + ',' + g.end.g + ',' + g.end.b + ')');
+        swatch.addEventListener('click', function() {
+          selectGradient(g, index);
+          updateGradientSelection(index);
+        });
+        row.appendChild(swatch);
+      })(i);
     }
   }
 
@@ -1918,13 +1926,16 @@ function selectBg(i) {
 
 // Select background color from all colors (theme + saved)
 function selectBgFromAll(idx) {
+  console.log('selectBgFromAll called with idx:', idx);
   var themeColors = palette.slice(0, 5);
   var savedColors = document._savedColors || [];
   var allColors = themeColors.concat(savedColors);
+  console.log('allColors:', allColors);
   
   if (idx >= 0 && idx < allColors.length) {
     colorMode = 'solid';
     selectedBg = allColors[idx];
+    console.log('selectedBg:', selectedBg);
     selectedGradient = null;
     selectedGradientIdx = -1;
     exitPickMode();
