@@ -2211,17 +2211,29 @@ function drawCanvas() {
 
   function posHandle() {
     if (!canvas.width) return;
-    var rect = canvas.getBoundingClientRect();
-    var r = rect.height / canvas.height;
-    var rw = rect.width / canvas.width;
+    var canvasRect = canvas.getBoundingClientRect();
+    var wrapRect = wrap.getBoundingClientRect();
+    
+    // 计算 canvas 相对于 wrap 的位置
+    var canvasLeft = canvasRect.left - wrapRect.left;
+    var canvasTop = canvasRect.top - wrapRect.top;
+    var canvasWidth = canvasRect.width;
+    var canvasHeight = canvasRect.height;
     
     if (currentLayout === 'bottom' || currentLayout === 'top') {
       // 上下布局 - 垂直分割线
-      var ph = canvas.height * photoRatio;
-      var py = canvas.height - ph;
-      handle.style.top = (py * r - 12) + 'px';
-      handle.style.left = '0';
-      handle.style.width = '100%';
+      var ph = canvasHeight * photoRatio;
+      var py;
+      if (currentLayout === 'top') {
+        // 原图在上，分割线在照片下方
+        py = ph;
+      } else {
+        // 原图在下，分割线在照片上方
+        py = canvasHeight - ph;
+      }
+      handle.style.top = (canvasTop + py - 12) + 'px';
+      handle.style.left = canvasLeft + 'px';
+      handle.style.width = canvasWidth + 'px';
       handle.style.height = '24px';
       handle.style.cursor = 'ns-resize';
       // 水平图标
@@ -2229,19 +2241,19 @@ function drawCanvas() {
       handle.classList.remove('vertical');
     } else {
       // 左右布局 - 水平分割线
-      var pw = canvas.width * photoRatio;
+      var pw = canvasWidth * photoRatio;
       var px;
       if (currentLayout === 'right') {
         // 原图在右，分割线在左侧
-        px = canvas.width - pw;
+        px = canvasWidth - pw;
       } else {
         // 原图在左，分割线在右侧
         px = pw;
       }
-      handle.style.left = (px * rw - 12) + 'px';
-      handle.style.top = '0';
+      handle.style.left = (canvasLeft + px - 12) + 'px';
+      handle.style.top = canvasTop + 'px';
       handle.style.width = '24px';
-      handle.style.height = '100%';
+      handle.style.height = canvasHeight + 'px';
       handle.style.cursor = 'ew-resize';
       // 垂直图标
       handle.style.flexDirection = 'column';
@@ -2352,7 +2364,13 @@ function drawCanvas() {
       // 上下布局 - 垂直拖动
       var cy = e.clientY, sy = canvas.height / rect.height;
       var y = (cy - rect.top) * sy;
-      photoRatio = Math.max(0.15, Math.min(0.85, (canvas.height - y) / canvas.height));
+      if (currentLayout === 'top') {
+        // 原图在上，比例是上方部分
+        photoRatio = Math.max(0.15, Math.min(0.85, y / canvas.height));
+      } else {
+        // 原图在下，比例是下方部分
+        photoRatio = Math.max(0.15, Math.min(0.85, (canvas.height - y) / canvas.height));
+      }
     } else {
       // 左右布局 - 水平拖动
       var cx = e.clientX, sx = canvas.width / rect.width;
@@ -2378,7 +2396,13 @@ function drawCanvas() {
       // 上下布局 - 垂直拖动
       var cy = e.touches[0].clientY, sy = canvas.height / rect.height;
       var y = (cy - rect.top) * sy;
-      photoRatio = Math.max(0.15, Math.min(0.85, (canvas.height - y) / canvas.height));
+      if (currentLayout === 'top') {
+        // 原图在上，比例是上方部分
+        photoRatio = Math.max(0.15, Math.min(0.85, y / canvas.height));
+      } else {
+        // 原图在下，比例是下方部分
+        photoRatio = Math.max(0.15, Math.min(0.85, (canvas.height - y) / canvas.height));
+      }
     } else {
       // 左右布局 - 水平拖动
       var cx = e.touches[0].clientX, sx = canvas.width / rect.width;
@@ -2518,7 +2542,8 @@ function androidDownload(blob) {
 
 function weChatDownload(blob, isIOS, isAndroid) {
   // 微信内环境的下载方法
-  var url = URL.createObjectURL(blob);
+  // 直接使用canvas.toDataURL()避免跨域问题
+  var url = canvas.toDataURL('image/png');
   
   // 创建一个新的图片元素
   var img = new Image();
