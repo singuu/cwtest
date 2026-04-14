@@ -43,11 +43,6 @@
       display: none;
     }
     
-    /* 优化触摸操作 */
-    .editor-panel {
-      touch-action: pan-y;
-    }
-    
     /* 防止双击缩放 */
     button, input, select {
       touch-action: manipulation;
@@ -310,12 +305,9 @@
       .editor-panel {
         max-height: 200px;
         width: 100%;
-        overflow-y: auto;
+        overflow-y: scroll;
         padding: 0 16px 20px 16px;
         -webkit-overflow-scrolling: touch;
-        touch-action: pan-y;
-        -webkit-user-select: none;
-        user-select: none;
         position: relative;
         z-index: 1;
       }
@@ -323,6 +315,12 @@
       /* 颜色面板间距调整 */
       #color-panel {
         padding-bottom: 0;
+      }
+      
+      /* 移动端颜色面板模式标签间距 */
+      #color-panel .mode-tabs {
+        gap: 12px;
+        margin-bottom: 16px;
       }
       
       /* 文字面板间距调整 */
@@ -647,8 +645,8 @@
     /* 背景模式 */
     .mode-tabs {
       display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 12px;
+      margin-bottom: 16px;
     }
     .mode-tab {
       padding: 6px 16px;
@@ -1128,10 +1126,10 @@
           <button class="mode-tab active" data-mode="solid">单色</button>
           <button class="mode-tab" data-mode="gradient">渐变</button>
         </div>
-        <div class="palette-row" id="bg-palette-row" style="margin-top: 14px;">
+        <div class="palette-row" id="bg-palette-row" style="margin-top: 16px;">
           <!-- 5个主题色 + 1个加号 -->
         </div>
-        <label class="noise-toggle" style="margin-top: 14px;">
+        <label class="noise-toggle" style="margin-top: 16px;">
           <input type="checkbox" id="noise-toggle"> 复古纹理
         </label>
         
