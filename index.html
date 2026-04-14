@@ -1840,16 +1840,14 @@ function renderBgPalette() {
     var allColors = themeColors.concat(savedColors);
     var displayCount = Math.min(5, allColors.length);
     
-    for (var i = 0; i < displayCount; i++) {
-      var c = allColors[i];
-      var swatch = document.createElement('div');
+    for (let i = 0; i < displayCount; i++) {
+      let c = allColors[i];
+      let swatch = document.createElement('div');
       swatch.className = 'palette-swatch';
       swatch.style.background = 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
-      swatch.dataset.index = i;
-      swatch.addEventListener('click', function(e) {
-        var idx = parseInt(e.target.dataset.index);
-        selectBgFromAll(idx);
-        updatePaletteSelection(idx);
+      swatch.addEventListener('click', function() {
+        selectBgFromAll(i);
+        updatePaletteSelection(i);
       });
       row.appendChild(swatch);
     }
@@ -1860,18 +1858,16 @@ function renderBgPalette() {
     var allGradients = autoGradients.concat(savedGradients);
     // Show up to 5 gradients total
     var displayCount = Math.min(5, allGradients.length);
-    for (var i = 0; i < displayCount; i++) {
-      var g = allGradients[i];
-      var swatch = document.createElement('div');
+    for (let i = 0; i < displayCount; i++) {
+      let g = allGradients[i];
+      let swatch = document.createElement('div');
       swatch.className = 'palette-swatch gradient-swatch';
       // Use CSS custom properties for gradient colors
       swatch.style.setProperty('--g-start', 'rgb(' + g.start.r + ',' + g.start.g + ',' + g.start.b + ')');
       swatch.style.setProperty('--g-end', 'rgb(' + g.end.r + ',' + g.end.g + ',' + g.end.b + ')');
-      swatch.dataset.index = i;
-      swatch.addEventListener('click', function(e) {
-        var idx = parseInt(e.target.dataset.index);
-        selectGradient(allGradients[idx], idx);
-        updateGradientSelection(idx);
+      swatch.addEventListener('click', function() {
+        selectGradient(g, i);
+        updateGradientSelection(i);
       });
       row.appendChild(swatch);
     }
