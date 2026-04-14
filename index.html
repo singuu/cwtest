@@ -2376,13 +2376,15 @@ function weChatDownload(blob, isIOS, isAndroid) {
     var imgContainer = document.createElement('div');
     imgContainer.style.width = '100%';
     imgContainer.style.maxWidth = '400px';
-    imgContainer.style.background = '#f5f5f5';
-    imgContainer.style.borderRadius = '12px';
-    imgContainer.style.overflow = 'hidden';
+    imgContainer.style.display = 'flex';
+    imgContainer.style.flexDirection = 'column';
+    imgContainer.style.alignItems = 'center';
     imgContainer.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
     
     // 添加图片
-    img.style.width = '100%';
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '70vh';
+    img.style.objectFit = 'contain';
     img.style.display = 'block';
     imgContainer.appendChild(img);
     
