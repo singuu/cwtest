@@ -1926,16 +1926,13 @@ function selectBg(i) {
 
 // Select background color from all colors (theme + saved)
 function selectBgFromAll(idx) {
-  console.log('selectBgFromAll called with idx:', idx);
   var themeColors = palette.slice(0, 5);
   var savedColors = document._savedColors || [];
   var allColors = themeColors.concat(savedColors);
-  console.log('allColors:', allColors);
   
   if (idx >= 0 && idx < allColors.length) {
     colorMode = 'solid';
     selectedBg = allColors[idx];
-    console.log('selectedBg:', selectedBg);
     selectedGradient = null;
     selectedGradientIdx = -1;
     exitPickMode();
@@ -2993,6 +2990,10 @@ document.getElementById('text-color-row').addEventListener('click', function(e) 
   if (rgbMatch) {
     var r = parseInt(rgbMatch[1]), g = parseInt(rgbMatch[2]), b = parseInt(rgbMatch[3]);
     selectedTextColor = 'rgba(' + r + ',' + g + ',' + b + ',0.9)';
+    // 确保背景模式保持不变
+    if (colorMode === 'solid' && !selectedBg && palette.length > 0) {
+      selectedBg = palette[0];
+    }
     drawCanvas();
   }
 });
@@ -3024,8 +3025,11 @@ document.getElementById('layout-row').addEventListener('click', function(e) {
   currentLayout = b.dataset.layout;
   // 切换布局时重置比例为 50-50
   photoRatio = 0.5;
-  drawCanvas();
-  posHandle();
+  // 强制重新计算分割线位置
+  setTimeout(function() {
+    drawCanvas();
+    posHandle();
+  }, 100);
 });
 
 document.getElementById('noise-toggle').addEventListener('change', function() {
