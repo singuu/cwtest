@@ -1236,12 +1236,7 @@
           <button class="ratio-btn" data-layout="right">原图在右</button>
         </div>
         
-        <p class="section-title" style="margin-top: 16px;">缩放</p>
-        <div class="slider-row" style="margin-top: 8px;">
-          <span style="font-size: 11px; color: #666; width: 36px;">原始</span>
-          <input type="range" id="photo-scale-slider" min="1" max="2" step="0.01" value="1" style="flex: 1;">
-          <span id="photo-scale-val" style="font-size: 11px; color: #888; width: 40px; text-align: right;">100%</span>
-        </div>
+
       </div>
     </div>
   </div>
@@ -2108,12 +2103,14 @@ function drawCanvas() {
   }
 }
 
-// Drag: photo position + split handle
+// Drag: photo position + split handle + pinch zoom
 (function() {
   var wrap = document.getElementById('preview-wrap');
   var handle = document.getElementById('split-handle');
   var hint = document.getElementById('drag-hint');
   var splitD = false, photoD = false, lx = 0, ly = 0;
+  var initialPinchDistance = 0;
+  var initialPhotoScale = 1;
 
   canvas.addEventListener('mouseenter', function() {
     hint.classList.add('visible');
@@ -2164,17 +2161,31 @@ function drawCanvas() {
     handle.classList.toggle('at-center', isCenter);
   }
 
+  function getPinchDistance(touches) {
+    var dx = touches[0].clientX - touches[1].clientX;
+    var dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   // Photo drag
   canvas.addEventListener('mousedown', function(e) { e.preventDefault(); photoD = true; canvas.classList.add('photo-dragging'); lx = e.clientX; ly = e.clientY; });
   canvas.addEventListener('touchstart', function(e) { 
-    e.preventDefault(); 
-    photoD = true; 
-    canvas.classList.add('photo-dragging'); 
-    lx = e.touches[0].clientX; 
-    ly = e.touches[0].clientY; 
-    // 添加触摸反馈
-    canvas.style.transform = 'scale(0.98)';
-    canvas.style.transition = 'transform 0.1s ease';
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      // 双指捏合缩放
+      initialPinchDistance = getPinchDistance(e.touches);
+      initialPhotoScale = photoScale;
+      photoD = false;
+    } else if (e.touches.length === 1) {
+      // 单指移动
+      photoD = true; 
+      canvas.classList.add('photo-dragging'); 
+      lx = e.touches[0].clientX; 
+      ly = e.touches[0].clientY; 
+      // 添加触摸反馈
+      canvas.style.transform = 'scale(0.98)';
+      canvas.style.transition = 'transform 0.1s ease';
+    }
   }, { passive: false });
   document.addEventListener('mousemove', function(e) {
     if (!photoD) return;
@@ -2189,21 +2200,32 @@ function drawCanvas() {
     posHandle();
   });
   document.addEventListener('touchmove', function(e) {
-    if (!photoD) return;
     e.preventDefault();
-    var rect = canvas.getBoundingClientRect();
-    var tx = e.touches[0].clientX, ty = e.touches[0].clientY;
-    // 优化触摸滑动的平滑度
-    var deltaX = (tx - lx) / rect.width * 2;
-    var deltaY = (ty - ly) / rect.height * 2;
-    // 添加惯性效果
-    photoOffsetX += deltaX * 0.8;
-    photoOffsetY += deltaY * 0.8;
-    photoOffsetX = Math.max(-1, Math.min(1, photoOffsetX));
-    photoOffsetY = Math.max(-1, Math.min(1, photoOffsetY));
-    lx = tx; ly = ty;
-    drawCanvas();
-    posHandle();
+    if (e.touches.length === 2) {
+      // 双指捏合缩放
+      var currentDistance = getPinchDistance(e.touches);
+      if (initialPinchDistance > 0) {
+        var scaleFactor = currentDistance / initialPinchDistance;
+        photoScale = Math.max(1, Math.min(2, initialPhotoScale * scaleFactor));
+        drawCanvas();
+        posHandle();
+      }
+    } else if (e.touches.length === 1 && photoD) {
+      // 单指移动
+      var rect = canvas.getBoundingClientRect();
+      var tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+      // 优化触摸滑动的平滑度
+      var deltaX = (tx - lx) / rect.width * 2;
+      var deltaY = (ty - ly) / rect.height * 2;
+      // 添加惯性效果
+      photoOffsetX += deltaX * 0.8;
+      photoOffsetY += deltaY * 0.8;
+      photoOffsetX = Math.max(-1, Math.min(1, photoOffsetX));
+      photoOffsetY = Math.max(-1, Math.min(1, photoOffsetY));
+      lx = tx; ly = ty;
+      drawCanvas();
+      posHandle();
+    }
   }, { passive: false });
   document.addEventListener('mouseup', function() { 
     if (photoD) { 
@@ -2219,9 +2241,9 @@ function drawCanvas() {
       canvas.classList.remove('photo-dragging');
       // 重置触摸反馈
       canvas.style.transform = 'scale(1)';
-    } 
+    }
+    initialPinchDistance = 0;
   });
-  document.addEventListener('mouseup', function() { if (photoD) { photoD = false; canvas.classList.remove('photo-dragging'); } });
   document.addEventListener('touchend', function() { if (photoD) { photoD = false; canvas.classList.remove('photo-dragging'); } });
 
   // Split handle
@@ -2888,8 +2910,11 @@ document.getElementById('ratio-row').addEventListener('click', function(e) {
   document.querySelectorAll('#ratio-row .ratio-btn').forEach(function(r) { r.classList.remove('active'); });
   b.classList.add('active');
   currentRatio = b.dataset.ratio;
+  // 切换画幅比例时重置比例为 50-50
+  photoRatio = 0.5;
   updatePreviewAspectRatio();
   drawCanvas();
+  posHandle();
 });
 
 document.getElementById('layout-row').addEventListener('click', function(e) {
@@ -2901,6 +2926,7 @@ document.getElementById('layout-row').addEventListener('click', function(e) {
   // 切换布局时重置比例为 50-50
   photoRatio = 0.5;
   drawCanvas();
+  posHandle();
 });
 
 document.getElementById('noise-toggle').addEventListener('change', function() {
@@ -2917,12 +2943,6 @@ document.getElementById('font-size-slider').addEventListener('input', function(e
 document.getElementById('letter-spacing-slider').addEventListener('input', function(e) {
   userLetterSpacing = parseFloat(e.target.value);
   document.getElementById('letter-spacing-val').textContent = e.target.value;
-  drawCanvas();
-});
-
-document.getElementById('photo-scale-slider').addEventListener('input', function(e) {
-  photoScale = parseFloat(e.target.value);
-  document.getElementById('photo-scale-val').textContent = Math.round(photoScale * 100) + '%';
   drawCanvas();
 });
 
