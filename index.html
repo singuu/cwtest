@@ -1479,11 +1479,6 @@ var welcomeCloseBtn = document.querySelector('.welcome-modal-close');
 
 // 欢迎弹窗逻辑
 function initWelcomeModal() {
-  // 检查是否已经显示过弹窗
-  if (localStorage.getItem('welcomeModalShown') === 'true') {
-    return;
-  }
-  
   // 检查日期（20260414 - 20260415）
   var today = new Date();
   var todayStr = today.getFullYear() + 
@@ -1493,12 +1488,17 @@ function initWelcomeModal() {
   var startDate = '20260414';
   var endDate = '20260415';
   
+  // 检查是否在显示日期范围内
   if (todayStr >= startDate && todayStr <= endDate) {
-    // 显示弹窗
-    welcomeModal.classList.add('visible');
-    
-    // 标记为已显示
-    localStorage.setItem('welcomeModalShown', 'true');
+    // 检查今天是否已经显示过
+    var lastShownDate = localStorage.getItem('welcomeModalLastShown');
+    if (lastShownDate !== todayStr) {
+      // 显示弹窗
+      welcomeModal.classList.add('visible');
+      
+      // 标记今天已显示
+      localStorage.setItem('welcomeModalLastShown', todayStr);
+    }
   }
 }
 
@@ -1667,13 +1667,13 @@ async function handleFile(file) {
     setLoadingText('生成效果...');
     setLoadingSubtext('创建个性化调色板');
     document._savedGradients = [];
-    renderBgPalette();
     console.log('palette:', palette);
     if (palette.length > 0) {
       selectedBg = palette[0];
       colorMode = 'solid';
       console.log('selectedBg set:', selectedBg);
     }
+    renderBgPalette();
     updateProgress(75);
 
     photoOffsetX = 0;
