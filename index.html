@@ -2198,7 +2198,9 @@ function drawCanvas() {
     posHandle();
   });
   document.addEventListener('touchmove', function(e) {
-    e.preventDefault();
+    if (e.touches.length === 2 || (e.touches.length === 1 && photoD)) {
+      e.preventDefault();
+    }
     if (e.touches.length === 2) {
       // 双指捏合缩放
       var currentDistance = getPinchDistance(e.touches);
