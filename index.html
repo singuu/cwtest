@@ -1371,6 +1371,16 @@ navBtns.forEach(function(btn) {
     if (targetPanelElement) {
       targetPanelElement.classList.add('active');
       console.log('Panel activated:', targetPanel);
+      
+      // 控制分割线的显示/隐藏
+      var splitHandle = document.getElementById('split-handle');
+      if (splitHandle) {
+        if (targetPanel === 'ratio-panel' && imgEl) {
+          splitHandle.style.display = 'flex';
+        } else {
+          splitHandle.style.display = 'none';
+        }
+      }
     }
   });
 });
@@ -1601,10 +1611,15 @@ async function handleFile(file) {
     loadingEl.style.display = 'none';
     previewWrap.style.display = 'flex';
     
-    // 显示分割线
+    // 控制分割线的显示/隐藏，只在布局模块显示
     var splitHandle = document.getElementById('split-handle');
     if (splitHandle) {
-      splitHandle.style.display = 'flex';
+      var activePanel = document.querySelector('.panel-content.active');
+      if (activePanel && activePanel.id === 'ratio-panel') {
+        splitHandle.style.display = 'flex';
+      } else {
+        splitHandle.style.display = 'none';
+      }
     }
 
     drawCanvas();
