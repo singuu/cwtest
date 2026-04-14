@@ -1671,11 +1671,9 @@ async function handleFile(file) {
     setLoadingText('生成效果...');
     setLoadingSubtext('创建个性化调色板');
     document._savedGradients = [];
-    console.log('palette:', palette);
     if (palette.length > 0) {
       selectedBg = palette[0];
       colorMode = 'solid';
-      console.log('selectedBg set:', selectedBg);
     }
     renderBgPalette();
     updateProgress(75);
@@ -1845,17 +1843,27 @@ function renderBgPalette() {
     var displayCount = Math.min(5, allColors.length);
     
     for (var i = 0; i < displayCount; i++) {
-      (function(index) {
-        var c = allColors[index];
+      (function(colorIndex, color) {
         var swatch = document.createElement('div');
         swatch.className = 'palette-swatch';
-        swatch.style.background = 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
-        swatch.addEventListener('click', function() {
-          selectBgFromAll(index);
-          updatePaletteSelection(index);
-        });
+        swatch.style.background = 'rgb(' + color.r + ',' + color.g + ',' + color.b + ')';
+        swatch.onclick = function() {
+          colorMode = 'solid';
+          selectedBg = color;
+          selectedGradient = null;
+          selectedGradientIdx = -1;
+          console.log('Selected solid color:', color);
+          console.log('Before drawCanvas - selectedBg:', selectedBg);
+          drawCanvas();
+          console.log('After drawCanvas - selectedBg:', selectedBg);
+          // 更新选择状态
+          var swatches = row.querySelectorAll('.palette-swatch');
+          swatches.forEach(function(s, i) {
+            s.classList.toggle('selected', i === colorIndex);
+          });
+        };
         row.appendChild(swatch);
-      })(i);
+      })(i, allColors[i]);
     }
   } else {
     // Auto-generated gradients + user saved gradients
@@ -1865,19 +1873,29 @@ function renderBgPalette() {
     // Show up to 5 gradients total
     var displayCount = Math.min(5, allGradients.length);
     for (var i = 0; i < displayCount; i++) {
-      (function(index) {
-        var g = allGradients[index];
+      (function(gradientIndex, gradient) {
         var swatch = document.createElement('div');
         swatch.className = 'palette-swatch gradient-swatch';
         // Use CSS custom properties for gradient colors
-        swatch.style.setProperty('--g-start', 'rgb(' + g.start.r + ',' + g.start.g + ',' + g.start.b + ')');
-        swatch.style.setProperty('--g-end', 'rgb(' + g.end.r + ',' + g.end.g + ',' + g.end.b + ')');
-        swatch.addEventListener('click', function() {
-          selectGradient(g, index);
-          updateGradientSelection(index);
-        });
+        swatch.style.setProperty('--g-start', 'rgb(' + gradient.start.r + ',' + gradient.start.g + ',' + gradient.start.b + ')');
+        swatch.style.setProperty('--g-end', 'rgb(' + gradient.end.r + ',' + gradient.end.g + ',' + gradient.end.b + ')');
+        swatch.onclick = function() {
+          colorMode = 'gradient';
+          selectedGradient = gradient;
+          selectedGradientIdx = gradientIndex;
+          selectedBg = null;
+          console.log('Selected gradient:', gradient);
+          console.log('Before drawCanvas - selectedGradient:', selectedGradient);
+          drawCanvas();
+          console.log('After drawCanvas - selectedGradient:', selectedGradient);
+          // 更新选择状态
+          var swatches = row.querySelectorAll('.gradient-swatch');
+          swatches.forEach(function(s, i) {
+            s.classList.toggle('selected', i === gradientIndex);
+          });
+        };
         row.appendChild(swatch);
-      })(i);
+      })(i, allGradients[i]);
     }
   }
 
@@ -1919,7 +1937,6 @@ function selectBg(i) {
   selectedBg = palette[i];
   selectedGradient = null;
   selectedGradientIdx = -1;
-  exitPickMode();
   drawCanvas();
   updatePaletteSelection(i);
 }
@@ -1935,9 +1952,11 @@ function selectBgFromAll(idx) {
     selectedBg = allColors[idx];
     selectedGradient = null;
     selectedGradientIdx = -1;
-    exitPickMode();
-    drawCanvas();
-    updatePaletteSelection(idx);
+    // 强制重新绘制
+    setTimeout(function() {
+      drawCanvas();
+      updatePaletteSelection(idx);
+    }, 50);
   }
 }
 
@@ -1946,7 +1965,6 @@ function selectGradient(g, idx) {
   selectedGradient = g;
   selectedGradientIdx = idx;
   selectedBg = null;
-  exitPickMode();
   drawCanvas();
   // Update gradient selection UI
   updateGradientSelection(idx);
@@ -1960,14 +1978,21 @@ function selectGradient(g, idx) {
 // Draw canvas
 function drawCanvas() {
   if (!imgEl) return;
+  // 只有在没有选择任何颜色时才设置默认颜色
   if (!selectedBg && !selectedGradient) {
     if (palette.length > 0) {
       selectedBg = palette[0];
       colorMode = 'solid';
+      console.log('Set default color:', selectedBg);
     } else {
       return;
     }
   }
+  console.log('drawCanvas called with:', {
+    colorMode: colorMode,
+    selectedBg: selectedBg,
+    selectedGradient: selectedGradient
+  });
   var rat = ratioMap[currentRatio];
   var W = 1080, H = Math.round(W / rat);
   canvas.width = W;
@@ -2957,13 +2982,22 @@ document.getElementById('mode-tabs').addEventListener('click', function(e) {
   document.querySelectorAll('.mode-tab').forEach(function(t) { t.classList.remove('active'); });
   tab.classList.add('active');
   colorMode = tab.dataset.mode;
+  console.log('Mode changed to:', colorMode);
   renderBgPalette();
-  if (colorMode === 'solid' && !selectedBg && palette.length > 0) selectBg(0);
-  else if (colorMode === 'gradient' && !selectedGradient) {
+  // 只有在当前模式下没有选择颜色时才设置默认颜色
+  if (colorMode === 'solid' && !selectedBg && palette.length > 0) {
+    console.log('Setting default solid color');
+    selectBg(0);
+  } else if (colorMode === 'gradient' && !selectedGradient) {
     var pairs = buildGradientPairs();
-    if (pairs.length > 0) selectGradient(pairs[0], 0);
+    if (pairs.length > 0) {
+      console.log('Setting default gradient');
+      selectGradient(pairs[0], 0);
+    }
+  } else {
+    console.log('Using existing color selection');
+    drawCanvas();
   }
-  else drawCanvas();
 });
 
 document.getElementById('font-row').addEventListener('click', function(e) {
