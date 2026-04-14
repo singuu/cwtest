@@ -288,7 +288,11 @@
         align-items: center;
         justify-content: center;
         border-width: 3px;
-        background: #333333;
+        background-color: #222222;
+        background-image: 
+          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: 20px 20px;
       }
       #preview-wrap {
         width: 100%;
@@ -418,7 +422,11 @@
       max-width: 480px;
       aspect-ratio: 3/4;
       border: 2px dashed #333;
-      background: #333333;
+      background-color: #222222;
+      background-image: 
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 20px 20px;
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -1227,6 +1235,13 @@
           <button class="ratio-btn" data-layout="left">原图在左</button>
           <button class="ratio-btn" data-layout="right">原图在右</button>
         </div>
+        
+        <p class="section-title" style="margin-top: 16px;">缩放</p>
+        <div class="slider-row" style="margin-top: 8px;">
+          <span style="font-size: 11px; color: #666; width: 36px;">原始</span>
+          <input type="range" id="photo-scale-slider" min="1" max="2" step="0.01" value="1" style="flex: 1;">
+          <span id="photo-scale-val" style="font-size: 11px; color: #888; width: 40px; text-align: right;">100%</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1326,6 +1341,7 @@ var userLetterSpacing = 2;
 var photoRatio = 0.5;
 var photoOffsetX = 0;
 var photoOffsetY = 0;
+var photoScale = 1;
 var noiseEnabled = false;
 var pickMode = false;
 var gradientPickState = null;
@@ -1495,6 +1511,11 @@ async function handleFile(file) {
 
     photoOffsetX = 0;
     photoOffsetY = 0;
+    photoScale = 1;
+    var scaleSlider = document.getElementById('photo-scale-slider');
+    var scaleVal = document.getElementById('photo-scale-val');
+    if (scaleSlider) scaleSlider.value = 1;
+    if (scaleVal) scaleVal.textContent = '100%';
 
     // 并行处理 EXIF 数据，不阻塞主线程
     setLoadingText('优化效果...');
@@ -1929,7 +1950,7 @@ function drawCanvas() {
     }
   }
 
-  // Cover-crop with offsets
+  // Cover-crop with offsets and scale
   var ir = imgEl.naturalWidth / imgEl.naturalHeight;
   var tr;
   var photoW, photoH;
@@ -1946,15 +1967,56 @@ function drawCanvas() {
     tr = photoW / photoH;
   }
   
-  var sw = imgEl.naturalWidth, sh = imgEl.naturalHeight;
-  if (ir > tr) sw = Math.round(imgEl.naturalHeight * tr);
-  else sh = Math.round(imgEl.naturalWidth / tr);
-  var sx = Math.round((imgEl.naturalWidth - sw) / 2);
-  var sy = Math.round((imgEl.naturalHeight - sh) / 2);
-  var maxX = imgEl.naturalWidth - sw, maxY = imgEl.naturalHeight - sh;
-  if (maxX > 0) { sx += Math.round(maxX * photoOffsetX * 0.5); sx = Math.max(0, Math.min(maxX, sx)); }
-  if (maxY > 0) { sy += Math.round(maxY * photoOffsetY * 0.5); sy = Math.max(0, Math.min(maxY, sy)); }
-  ctx.drawImage(imgEl, sx, sy, sw, sh, photoX, photoY, photoW, photoH);
+  // 先填充整个照片区域的背景色
+  if (colorMode === 'gradient' && selectedGradient) {
+    var grad;
+    if (currentLayout === 'bottom' || currentLayout === 'top') {
+      grad = ctx.createLinearGradient(photoX, photoY, photoX, photoY + photoH);
+    } else {
+      grad = ctx.createLinearGradient(photoX, photoY, photoX + photoW, photoY);
+    }
+    var s = selectedGradient.start, e = selectedGradient.end;
+    grad.addColorStop(0, 'rgb(' + s.r + ',' + s.g + ',' + s.b + ')');
+    grad.addColorStop(0.25, 'rgb(' + Math.round(s.r * 0.75 + e.r * 0.25) + ',' + Math.round(s.g * 0.75 + e.g * 0.25) + ',' + Math.round(s.b * 0.75 + e.b * 0.25) + ')');
+    grad.addColorStop(0.5, 'rgb(' + Math.round((s.r + e.r) / 2) + ',' + Math.round((s.g + e.g) / 2) + ',' + Math.round((s.b + e.b) / 2) + ')');
+    grad.addColorStop(0.75, 'rgb(' + Math.round(s.r * 0.25 + e.r * 0.75) + ',' + Math.round(s.g * 0.25 + e.g * 0.75) + ',' + Math.round(s.b * 0.25 + e.b * 0.75) + ')');
+    grad.addColorStop(1, 'rgb(' + e.r + ',' + e.g + ',' + e.b + ')');
+    ctx.fillStyle = grad;
+  } else if (selectedBg) {
+    ctx.fillStyle = 'rgb(' + selectedBg.r + ',' + selectedBg.g + ',' + selectedBg.b + ')';
+  }
+  ctx.fillRect(photoX, photoY, photoW, photoH);
+  
+  // 计算缩放和裁剪（只允许放大）
+  var sw, sh, sx, sy, dw, dh, dx, dy;
+  
+  // 只处理放大或100%的情况
+  if (ir > tr) {
+    sh = imgEl.naturalHeight / photoScale;
+    sw = sh * tr;
+  } else {
+    sw = imgEl.naturalWidth / photoScale;
+    sh = sw / tr;
+  }
+  
+  // 裁剪起始位置
+  sx = (imgEl.naturalWidth - sw) / 2;
+  sy = (imgEl.naturalHeight - sh) / 2;
+  
+  // 应用偏移
+  var maxX = imgEl.naturalWidth - sw;
+  var maxY = imgEl.naturalHeight - sh;
+  if (maxX > 0) { sx += maxX * photoOffsetX * 0.5; sx = Math.max(0, Math.min(maxX, sx)); }
+  if (maxY > 0) { sy += maxY * photoOffsetY * 0.5; sy = Math.max(0, Math.min(maxY, sy)); }
+  
+  // 绘制尺寸填满整个区域
+  dw = photoW;
+  dh = photoH;
+  dx = photoX;
+  dy = photoY;
+  
+  // 绘制图片
+  ctx.drawImage(imgEl, sx, sy, sw, sh, dx, dy, dw, dh);
 
   // Text - build caption from location, time, and custom input based on switches
   var customCaption = showCustom ? document.getElementById('caption-input').value.trim() : '';
@@ -2239,15 +2301,27 @@ function doDownload() {
         if (isWeChat) {
           // 微信内环境特殊处理
           weChatDownload(blob, isIOS, isAndroid);
-        } else if (navigator.share) {
-          // 使用 Web Share API (iOS 12+, Android 6+)
-          navigator.share({
-            title: 'Colorwalk',
-            text: 'My Colorwalk creation',
-            files: [new File([blob], 'colorwalk_' + Date.now() + '.png', { type: 'image/png' })]
-          }).catch(function(error) {
-            console.log('Share failed:', error);
-            // 回退到平台特定的下载方法
+        } else if (navigator.share && navigator.canShare) {
+          // 优先使用 Web Share API (iOS 12+, Android 6+)
+          var file = new File([blob], 'colorwalk_' + Date.now() + '.png', { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({
+              title: 'ColorWalk',
+              text: 'My ColorWalk creation',
+              files: [file]
+            }).catch(function(error) {
+              console.log('Share failed:', error);
+              // 回退到平台特定的下载方法
+              if (isIOS) {
+                iosDownload(blob);
+              } else if (isAndroid) {
+                androidDownload(blob);
+              } else {
+                fallbackDownload(blob);
+              }
+            });
+          } else {
+            // canShare 不支持文件，回退到平台特定的下载方法
             if (isIOS) {
               iosDownload(blob);
             } else if (isAndroid) {
@@ -2255,7 +2329,7 @@ function doDownload() {
             } else {
               fallbackDownload(blob);
             }
-          });
+          }
         } else {
           // 根据平台选择不同的下载方法
           if (isIOS) {
@@ -2297,16 +2371,33 @@ function iosDownload(blob) {
 function androidDownload(blob) {
   // Android 设备的下载方法
   var url = URL.createObjectURL(blob);
+  
+  // 方法1：直接尝试使用浏览器下载
   var a = document.createElement('a');
   a.href = url;
   a.download = 'colorwalk_' + Date.now() + '.png';
-  // Android 设备需要设置更多属性
-  a.setAttribute('target', '_blank');
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  
+  // 方法2：如果方法1失败，尝试在新窗口打开
+  setTimeout(function() {
+    try {
+      var win = window.open(url, '_blank');
+      if (!win) {
+        // 如果新窗口被阻止，尝试使用 location.href
+        window.location.href = url;
+      }
+    } catch(e) {
+      console.log('Android download fallback failed:', e);
+    }
+  }, 100);
+  
+  // 清理 URL
+  setTimeout(function() {
+    URL.revokeObjectURL(url);
+  }, 10000);
 }
 
 function weChatDownload(blob, isIOS, isAndroid) {
@@ -2826,6 +2917,12 @@ document.getElementById('font-size-slider').addEventListener('input', function(e
 document.getElementById('letter-spacing-slider').addEventListener('input', function(e) {
   userLetterSpacing = parseFloat(e.target.value);
   document.getElementById('letter-spacing-val').textContent = e.target.value;
+  drawCanvas();
+});
+
+document.getElementById('photo-scale-slider').addEventListener('input', function(e) {
+  photoScale = parseFloat(e.target.value);
+  document.getElementById('photo-scale-val').textContent = Math.round(photoScale * 100) + '%';
   drawCanvas();
 });
 
