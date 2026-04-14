@@ -1557,14 +1557,41 @@ navBtns.forEach(function(btn) {
       // 控制分割线的显示/隐藏
       var splitHandle = document.getElementById('split-handle');
       if (splitHandle) {
-        if (targetPanel === 'ratio-panel' && imgEl) {
+        var isDesktop = window.innerWidth >= 769;
+        if (isDesktop && imgEl) {
+          // 桌面端：只要有图片就显示分割线
           splitHandle.style.display = 'flex';
         } else {
-          splitHandle.style.display = 'none';
+          // 移动端：只在布局面板时显示
+          if (targetPanel === 'ratio-panel' && imgEl) {
+            splitHandle.style.display = 'flex';
+          } else {
+            splitHandle.style.display = 'none';
+          }
         }
       }
     }
   });
+});
+
+// 监听窗口大小变化，更新分割线显示状态
+window.addEventListener('resize', function() {
+  var splitHandle = document.getElementById('split-handle');
+  if (splitHandle && imgEl) {
+    var isDesktop = window.innerWidth >= 769;
+    if (isDesktop) {
+      // 桌面端：显示分割线
+      splitHandle.style.display = 'flex';
+    } else {
+      // 移动端：检查是否在布局面板
+      var activePanel = document.querySelector('.panel-content.active');
+      if (activePanel && activePanel.id === 'ratio-panel') {
+        splitHandle.style.display = 'flex';
+      } else {
+        splitHandle.style.display = 'none';
+      }
+    }
+  }
 });
 
 // Hidden file input
@@ -1801,14 +1828,21 @@ async function handleFile(file) {
     loadingEl.style.display = 'none';
     previewWrap.style.display = 'flex';
     
-    // 控制分割线的显示/隐藏，只在布局模块显示
+    // 控制分割线的显示/隐藏
     var splitHandle = document.getElementById('split-handle');
     if (splitHandle) {
-      var activePanel = document.querySelector('.panel-content.active');
-      if (activePanel && activePanel.id === 'ratio-panel') {
+      var isDesktop = window.innerWidth >= 769;
+      if (isDesktop && imgEl) {
+        // 桌面端：只要有图片就显示分割线
         splitHandle.style.display = 'flex';
       } else {
-        splitHandle.style.display = 'none';
+        // 移动端：只在布局面板时显示
+        var activePanel = document.querySelector('.panel-content.active');
+        if (activePanel && activePanel.id === 'ratio-panel' && imgEl) {
+          splitHandle.style.display = 'flex';
+        } else {
+          splitHandle.style.display = 'none';
+        }
       }
     }
 
