@@ -1413,141 +1413,48 @@
 
 <script>
 // ══════════════════════════════════════════════════════
-//  优化的颜色提取算法
+//  k-means 颜色提取
 // ══════════════════════════════════════════════════════
 function extractPalette(img, k) {
-  k = k || 6;
-  var size = 80, c = document.createElement('canvas');
+  k = k || 8;
+  var size = 120, c = document.createElement('canvas');
   c.width = c.height = size;
   var ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0, size, size);
   var d = ctx.getImageData(0, 0, size, size).data;
-  
-  // 减少像素样本，提高性能
   var pixels = [];
-  var step = 4; // 每4个像素取一个样本
-  for (var i = 0; i < d.length; i += 4 * step) {
-    if (d[i+3] >= 128) {
-      pixels.push([d[i], d[i+1], d[i+2]]);
-    }
+  for (var i = 0; i < d.length; i += 4) {
+    if (d[i+3] >= 128) pixels.push([d[i], d[i+1], d[i+2]]);
   }
-  
-  if (pixels.length === 0) {
-    return [{ r: 200, g: 200, b: 200, sat: 0 }];
-  }
-  
-  // 简化的聚类算法
-  var centers = [];
-  var step = Math.floor(pixels.length / k);
-  for (var j = 0; j < k && j < pixels.length; j++) {
-    centers.push(pixels[j * step].slice());
-  }
-  
-  // 减少迭代次数
-  for (var iter = 0; iter < 8; iter++) {
+  var centers = [], step = Math.floor(pixels.length / k);
+  for (var j = 0; j < k; j++) centers.push(pixels[j * step].slice());
+  for (var iter = 0; iter < 12; iter++) {
     var sums = [];
-    for (var j = 0; j < centers.length; j++) {
-      sums.push([0, 0, 0, 0]);
-    }
-    
+    for (var j = 0; j < k; j++) sums.push([0, 0, 0, 0]);
     for (var pi = 0; pi < pixels.length; pi++) {
       var p = pixels[pi], best = 0, bestD = Infinity;
-      for (var ci = 0; ci < centers.length; ci++) {
-        var dist = Math.abs(p[0]-centers[ci][0]) + Math.abs(p[1]-centers[ci][1]) + Math.abs(p[2]-centers[ci][2]);
-        if (dist < bestD) {
-          bestD = dist;
-          best = ci;
-        }
+      for (var ci = 0; ci < k; ci++) {
+        var dist = Math.pow(p[0]-centers[ci][0], 2) + Math.pow(p[1]-centers[ci][1], 2) + Math.pow(p[2]-centers[ci][2], 2);
+        if (dist < bestD) { bestD = dist; best = ci; }
       }
-      sums[best][0] += p[0];
-      sums[best][1] += p[1];
-      sums[best][2] += p[2];
-      sums[best][3]++;
+      sums[best][0] += p[0]; sums[best][1] += p[1]; sums[best][2] += p[2]; sums[best][3]++;
     }
-    
-    for (var ci = 0; ci < centers.length; ci++) {
-      if (sums[ci][3]) {
-        centers[ci] = [
-          sums[ci][0] / sums[ci][3],
-          sums[ci][1] / sums[ci][3],
-          sums[ci][2] / sums[ci][3]
-        ];
-      }
+    for (var ci = 0; ci < k; ci++) {
+      centers[ci] = sums[ci][3] ? [sums[ci][0]/sums[ci][3], sums[ci][1]/sums[ci][3], sums[ci][2]/sums[ci][3]] : centers[ci];
     }
   }
-  
   return centers.map(function(rgb) {
-    var mx = Math.max(rgb[0], rgb[1], rgb[2]);
-    var mn = Math.min(rgb[0], rgb[1], rgb[2]);
-    return {
-      r: Math.round(rgb[0]),
-      g: Math.round(rgb[1]),
-      b: Math.round(rgb[2]),
-      sat: mx ? (mx - mn) / mx : 0
-    };
-  }).sort(function(a, b) {
-    return b.sat - a.sat;
-  });
+    var mx = Math.max(rgb[0], rgb[1], rgb[2]), mn = Math.min(rgb[0], rgb[1], rgb[2]);
+    return { r: Math.round(rgb[0]), g: Math.round(rgb[1]), b: Math.round(rgb[2]), sat: mx ? (mx-mn)/mx : 0 };
+  }).sort(function(a, b) { return b.sat - a.sat; });
 }
 
-// EXIF - 内联简化版本
-globalThis.exifr = {
-  parse: async function(file, options) {
-    try {
-      const reader = new FileReader();
-      const data = await new Promise((resolve, reject) => {
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-      });
-      
-      // 简化的 EXIF 解析，只提取日期时间
-      const view = new DataView(data);
-      let offset = 0;
-      
-      // 检查 JPEG 头部
-      if (view.getUint8(0) === 0xFF && view.getUint8(1) === 0xD8) {
-        offset = 2;
-        while (offset < view.byteLength) {
-          const marker = view.getUint8(offset);
-          if (marker === 0xFF) {
-            const tag = view.getUint8(offset + 1);
-            const length = view.getUint16(offset + 2) + 2;
-            
-            // APP1 标记，可能包含 EXIF 数据
-            if (tag === 0xE1) {
-              const app1Data = new DataView(data, offset + 4, length - 2);
-              const exifHeader = new TextDecoder().decode(new Uint8Array(app1Data.buffer, 0, 6));
-              if (exifHeader === 'Exif\0\0') {
-                // 简单查找 DateTime 标签
-                let exifOffset = 10; // 跳过头部
-                while (exifOffset < app1Data.byteLength - 12) {
-                  const tagId = app1Data.getUint16(exifOffset);
-                  if (tagId === 0x0132) { // DateTime
-                    const type = app1Data.getUint16(exifOffset + 2);
-                    const count = app1Data.getUint32(exifOffset + 4);
-                    const valueOffset = app1Data.getUint32(exifOffset + 8);
-                    if (type === 2 && count === 20) {
-                      const dateStr = new TextDecoder().decode(new Uint8Array(app1Data.buffer, valueOffset, 19));
-                      return { DateTime: dateStr };
-                    }
-                  }
-                  exifOffset += 12;
-                }
-              }
-            }
-          }
-          offset += length;
-        }
-      }
-      return {};
-    } catch (e) {
-      console.log('EXIF 解析错误:', e);
-      return {};
-    }
-  }
-};
-var exifrReady = true;
+// EXIF
+var exifrReady = false;
+var es = document.createElement('script');
+es.src = 'https://unpkg.com/exifr@7.1.3/dist/full.umd.js';
+es.onload = function() { exifrReady = true; };
+document.head.appendChild(es);
 
 // State
 var imgEl = null;
@@ -1814,10 +1721,6 @@ async function handleFile(file) {
     setLoadingText('生成效果...');
     setLoadingSubtext('创建个性化调色板');
     document._savedGradients = [];
-    if (palette.length > 0) {
-      selectedBg = palette[0];
-      colorMode = 'solid';
-    }
     renderBgPalette();
     updateProgress(75);
 
@@ -1860,48 +1763,38 @@ async function handleFile(file) {
             
             if (exif.latitude && exif.longitude) {
               try {
-                // 添加地理编码超时处理和错误处理
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                // 添加地理编码超时处理
+                const geoPromise = fetch(
+                  'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
+                  { headers: { 'Accept-Language': 'en' }, timeout: 2000 }
+                );
+                const geoTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('地理编码超时')), 2000));
                 
                 try {
-                  const r = await fetch(
-                    'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
-                    { 
-                      headers: { 'Accept-Language': 'en' },
-                      signal: controller.signal
-                    }
-                  );
+                  var r = await Promise.race([geoPromise, geoTimeout]);
+                  var g = await r.json();
+                  var addr = g.address || {};
+                  var country = addr.country || '';
+                  var city = '';
                   
-                  clearTimeout(timeoutId);
+                  if (country === 'China' || country === '中国') {
+                    city = addr.state || addr.province || addr.city || '';
+                  } else {
+                    city = addr.city || addr.town || addr.village || addr.county || addr.state || 
+                           addr.district || addr.suburb || '';
+                  }
                   
-                  if (r.ok) {
-                    const g = await r.json();
-                    const addr = g.address || {};
-                    let country = addr.country || '';
-                    let city = '';
-                    
+                  if (city && country) {
                     if (country === 'China' || country === '中国') {
-                      city = addr.state || addr.province || addr.city || '';
+                      locStr = city;
                     } else {
-                      city = addr.city || addr.town || addr.village || addr.county || addr.state || 
-                             addr.district || addr.suburb || '';
+                      locStr = city + ', ' + country;
                     }
-                    
-                    if (city && country) {
-                      if (country === 'China' || country === '中国') {
-                        locStr = city;
-                      } else {
-                        locStr = city + ', ' + country;
-                      }
-                    } else {
-                      locStr = city || country || '';
-                    }
+                  } else {
+                    locStr = city || country || '';
                   }
                 } catch(geoErr) {
-                  console.log('地理编码请求失败，跳过位置信息:', geoErr.message);
-                } finally {
-                  clearTimeout(timeoutId);
+                  console.log('地理编码请求超时，跳过位置信息');
                 }
               } catch(e) {
                 console.log('Location fetch error:', e);
