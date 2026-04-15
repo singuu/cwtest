@@ -532,6 +532,22 @@
       z-index: 5;
     }
     .photo-drag-hint.visible { opacity: 1; }
+    
+    /* 文字输入提示 */
+    .text-input-hint {
+      position: absolute;
+      font-size: 14px;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 1px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 5;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .text-input-hint.visible {
+      opacity: 1;
+    }
     .split-handle {
       position: absolute;
       left: 0;
@@ -1231,6 +1247,7 @@
       <div id="preview-wrap">
         <canvas id="canvas-preview"></canvas>
         <div class="photo-drag-hint" id="drag-hint">拖动照片调整位置</div>
+        <div class="text-input-hint" id="text-input-hint">请输入文字</div>
         <div class="split-handle" id="split-handle" title="上下拖动调整纯色区与照片区比例"></div>
       </div>
     </div>
@@ -1291,26 +1308,8 @@
           </div>
         </div>
         
-        <!-- 字号 -->
-        <div style="margin-bottom: 16px;">
-          <p class="field-label" style="margin-bottom: 8px;">字号</p>
-          <div class="slider-row">
-            <input type="range" id="font-size-slider" min="20" max="80" value="36" step="1">
-            <span id="font-size-val">36</span>
-          </div>
-        </div>
-        
-        <!-- 字距 -->
-        <div style="margin-bottom: 16px;">
-          <p class="field-label" style="margin-bottom: 8px;">字距</p>
-          <div class="slider-row">
-            <input type="range" id="letter-spacing-slider" min="0" max="30" value="2" step="0.5">
-            <span id="letter-spacing-val">2</span>
-          </div>
-        </div>
-        
         <!-- 内容 -->
-        <div>
+        <div style="margin-bottom: 16px;">
           <p class="field-label" style="margin-bottom: 12px;">内容</p>
           
           <!-- 城市开关 -->
@@ -1332,7 +1331,25 @@
           </label>
           
           <!-- 自定义输入 -->
-          <input type="text" id="caption-input" placeholder="输入文字" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid #2e2e2e; border-radius: 8px; padding: 10px 14px; color: #ddd; font-size: 14px; outline: none; display: none;">
+          <textarea id="caption-input" placeholder="输入文字" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid #2e2e2e; border-radius: 8px; padding: 10px 14px; color: #ddd; font-size: 14px; outline: none; display: none; resize: vertical; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;"></textarea>
+        </div>
+        
+        <!-- 字号 -->
+        <div style="margin-bottom: 16px;">
+          <p class="field-label" style="margin-bottom: 8px;">字号</p>
+          <div class="slider-row">
+            <input type="range" id="font-size-slider" min="20" max="80" value="36" step="1">
+            <span id="font-size-val">36</span>
+          </div>
+        </div>
+        
+        <!-- 字距 -->
+        <div>
+          <p class="field-label" style="margin-bottom: 8px;">字距</p>
+          <div class="slider-row">
+            <input type="range" id="letter-spacing-slider" min="0" max="30" value="2" step="0.5">
+            <span id="letter-spacing-val">2</span>
+          </div>
         </div>
       </div>
       
@@ -1396,48 +1413,141 @@
 
 <script>
 // ══════════════════════════════════════════════════════
-//  k-means 颜色提取
+//  优化的颜色提取算法
 // ══════════════════════════════════════════════════════
 function extractPalette(img, k) {
-  k = k || 8;
-  var size = 120, c = document.createElement('canvas');
+  k = k || 6;
+  var size = 80, c = document.createElement('canvas');
   c.width = c.height = size;
   var ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0, size, size);
   var d = ctx.getImageData(0, 0, size, size).data;
+  
+  // 减少像素样本，提高性能
   var pixels = [];
-  for (var i = 0; i < d.length; i += 4) {
-    if (d[i+3] >= 128) pixels.push([d[i], d[i+1], d[i+2]]);
+  var step = 4; // 每4个像素取一个样本
+  for (var i = 0; i < d.length; i += 4 * step) {
+    if (d[i+3] >= 128) {
+      pixels.push([d[i], d[i+1], d[i+2]]);
+    }
   }
-  var centers = [], step = Math.floor(pixels.length / k);
-  for (var j = 0; j < k; j++) centers.push(pixels[j * step].slice());
-  for (var iter = 0; iter < 12; iter++) {
+  
+  if (pixels.length === 0) {
+    return [{ r: 200, g: 200, b: 200, sat: 0 }];
+  }
+  
+  // 简化的聚类算法
+  var centers = [];
+  var step = Math.floor(pixels.length / k);
+  for (var j = 0; j < k && j < pixels.length; j++) {
+    centers.push(pixels[j * step].slice());
+  }
+  
+  // 减少迭代次数
+  for (var iter = 0; iter < 8; iter++) {
     var sums = [];
-    for (var j = 0; j < k; j++) sums.push([0, 0, 0, 0]);
+    for (var j = 0; j < centers.length; j++) {
+      sums.push([0, 0, 0, 0]);
+    }
+    
     for (var pi = 0; pi < pixels.length; pi++) {
       var p = pixels[pi], best = 0, bestD = Infinity;
-      for (var ci = 0; ci < k; ci++) {
-        var dist = Math.pow(p[0]-centers[ci][0], 2) + Math.pow(p[1]-centers[ci][1], 2) + Math.pow(p[2]-centers[ci][2], 2);
-        if (dist < bestD) { bestD = dist; best = ci; }
+      for (var ci = 0; ci < centers.length; ci++) {
+        var dist = Math.abs(p[0]-centers[ci][0]) + Math.abs(p[1]-centers[ci][1]) + Math.abs(p[2]-centers[ci][2]);
+        if (dist < bestD) {
+          bestD = dist;
+          best = ci;
+        }
       }
-      sums[best][0] += p[0]; sums[best][1] += p[1]; sums[best][2] += p[2]; sums[best][3]++;
+      sums[best][0] += p[0];
+      sums[best][1] += p[1];
+      sums[best][2] += p[2];
+      sums[best][3]++;
     }
-    for (var ci = 0; ci < k; ci++) {
-      centers[ci] = sums[ci][3] ? [sums[ci][0]/sums[ci][3], sums[ci][1]/sums[ci][3], sums[ci][2]/sums[ci][3]] : centers[ci];
+    
+    for (var ci = 0; ci < centers.length; ci++) {
+      if (sums[ci][3]) {
+        centers[ci] = [
+          sums[ci][0] / sums[ci][3],
+          sums[ci][1] / sums[ci][3],
+          sums[ci][2] / sums[ci][3]
+        ];
+      }
     }
   }
+  
   return centers.map(function(rgb) {
-    var mx = Math.max(rgb[0], rgb[1], rgb[2]), mn = Math.min(rgb[0], rgb[1], rgb[2]);
-    return { r: Math.round(rgb[0]), g: Math.round(rgb[1]), b: Math.round(rgb[2]), sat: mx ? (mx-mn)/mx : 0 };
-  }).sort(function(a, b) { return b.sat - a.sat; });
+    var mx = Math.max(rgb[0], rgb[1], rgb[2]);
+    var mn = Math.min(rgb[0], rgb[1], rgb[2]);
+    return {
+      r: Math.round(rgb[0]),
+      g: Math.round(rgb[1]),
+      b: Math.round(rgb[2]),
+      sat: mx ? (mx - mn) / mx : 0
+    };
+  }).sort(function(a, b) {
+    return b.sat - a.sat;
+  });
 }
 
-// EXIF
-var exifrReady = false;
-var es = document.createElement('script');
-es.src = 'https://unpkg.com/exifr@7.1.3/dist/full.umd.js';
-es.onload = function() { exifrReady = true; };
-document.head.appendChild(es);
+// EXIF - 内联简化版本
+globalThis.exifr = {
+  parse: async function(file, options) {
+    try {
+      const reader = new FileReader();
+      const data = await new Promise((resolve, reject) => {
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+      
+      // 简化的 EXIF 解析，只提取日期时间
+      const view = new DataView(data);
+      let offset = 0;
+      
+      // 检查 JPEG 头部
+      if (view.getUint8(0) === 0xFF && view.getUint8(1) === 0xD8) {
+        offset = 2;
+        while (offset < view.byteLength) {
+          const marker = view.getUint8(offset);
+          if (marker === 0xFF) {
+            const tag = view.getUint8(offset + 1);
+            const length = view.getUint16(offset + 2) + 2;
+            
+            // APP1 标记，可能包含 EXIF 数据
+            if (tag === 0xE1) {
+              const app1Data = new DataView(data, offset + 4, length - 2);
+              const exifHeader = new TextDecoder().decode(new Uint8Array(app1Data.buffer, 0, 6));
+              if (exifHeader === 'Exif\0\0') {
+                // 简单查找 DateTime 标签
+                let exifOffset = 10; // 跳过头部
+                while (exifOffset < app1Data.byteLength - 12) {
+                  const tagId = app1Data.getUint16(exifOffset);
+                  if (tagId === 0x0132) { // DateTime
+                    const type = app1Data.getUint16(exifOffset + 2);
+                    const count = app1Data.getUint32(exifOffset + 4);
+                    const valueOffset = app1Data.getUint32(exifOffset + 8);
+                    if (type === 2 && count === 20) {
+                      const dateStr = new TextDecoder().decode(new Uint8Array(app1Data.buffer, valueOffset, 19));
+                      return { DateTime: dateStr };
+                    }
+                  }
+                  exifOffset += 12;
+                }
+              }
+            }
+          }
+          offset += length;
+        }
+      }
+      return {};
+    } catch (e) {
+      console.log('EXIF 解析错误:', e);
+      return {};
+    }
+  }
+};
+var exifrReady = true;
 
 // State
 var imgEl = null;
@@ -1479,31 +1589,27 @@ var welcomeCloseBtn = document.querySelector('.welcome-modal-close');
 
 // 欢迎弹窗逻辑
 function initWelcomeModal() {
-  // 强制显示弹窗测试
-  console.log('initWelcomeModal called');
-  welcomeModal.classList.add('visible');
-  
   // 检查日期（20260414 - 20260415）
-  // var today = new Date();
-  // var todayStr = today.getFullYear() + 
-  //               String(today.getMonth() + 1).padStart(2, '0') + 
-  //               String(today.getDate()).padStart(2, '0');
-  // 
-  // var startDate = '20260414';
-  // var endDate = '20260415';
-  // 
-  // // 检查是否在显示日期范围内
-  // if (todayStr >= startDate && todayStr <= endDate) {
-  //   // 检查今天是否已经显示过
-  //   var lastShownDate = localStorage.getItem('welcomeModalLastShown');
-  //   if (lastShownDate !== todayStr) {
-  //     // 显示弹窗
-  //     welcomeModal.classList.add('visible');
-  //     
-  //     // 标记今天已显示
-  //     localStorage.setItem('welcomeModalLastShown', todayStr);
-  //   }
-  // }
+  var today = new Date();
+  var todayStr = today.getFullYear() + 
+                String(today.getMonth() + 1).padStart(2, '0') + 
+                String(today.getDate()).padStart(2, '0');
+  
+  var startDate = '20260414';
+  var endDate = '20260415';
+  
+  // 检查是否在显示日期范围内
+  if (todayStr >= startDate && todayStr <= endDate) {
+    // 检查今天是否已经显示过
+    var lastShownDate = localStorage.getItem('welcomeModalLastShown');
+    if (lastShownDate !== todayStr) {
+      // 显示弹窗
+      welcomeModal.classList.add('visible');
+      
+      // 标记今天已显示
+      localStorage.setItem('welcomeModalLastShown', todayStr);
+    }
+  }
 }
 
 // 关闭弹窗
@@ -1642,6 +1748,16 @@ if (logoRefresh) {
   });
 }
 
+// 监听自定义文字输入，实时更新画布
+var captionInput = document.getElementById('caption-input');
+if (captionInput) {
+  captionInput.addEventListener('input', function() {
+    if (imgEl) {
+      drawCanvas();
+    }
+  });
+}
+
 // Build gradient pairs (3 gradients: 1+3, 2+4, 3+5)
 function buildGradientPairs() {
   if (!palette || palette.length < 2) return [];
@@ -1744,38 +1860,48 @@ async function handleFile(file) {
             
             if (exif.latitude && exif.longitude) {
               try {
-                // 添加地理编码超时处理
-                const geoPromise = fetch(
-                  'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
-                  { headers: { 'Accept-Language': 'en' }, timeout: 2000 }
-                );
-                const geoTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('地理编码超时')), 2000));
+                // 添加地理编码超时处理和错误处理
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
                 
                 try {
-                  var r = await Promise.race([geoPromise, geoTimeout]);
-                  var g = await r.json();
-                  var addr = g.address || {};
-                  var country = addr.country || '';
-                  var city = '';
-                  
-                  if (country === 'China' || country === '中国') {
-                    city = addr.state || addr.province || addr.city || '';
-                  } else {
-                    city = addr.city || addr.town || addr.village || addr.county || addr.state || 
-                           addr.district || addr.suburb || '';
-                  }
-                  
-                  if (city && country) {
-                    if (country === 'China' || country === '中国') {
-                      locStr = city;
-                    } else {
-                      locStr = city + ', ' + country;
+                  const r = await fetch(
+                    'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
+                    { 
+                      headers: { 'Accept-Language': 'en' },
+                      signal: controller.signal
                     }
-                  } else {
-                    locStr = city || country || '';
+                  );
+                  
+                  clearTimeout(timeoutId);
+                  
+                  if (r.ok) {
+                    const g = await r.json();
+                    const addr = g.address || {};
+                    let country = addr.country || '';
+                    let city = '';
+                    
+                    if (country === 'China' || country === '中国') {
+                      city = addr.state || addr.province || addr.city || '';
+                    } else {
+                      city = addr.city || addr.town || addr.village || addr.county || addr.state || 
+                             addr.district || addr.suburb || '';
+                    }
+                    
+                    if (city && country) {
+                      if (country === 'China' || country === '中国') {
+                        locStr = city;
+                      } else {
+                        locStr = city + ', ' + country;
+                      }
+                    } else {
+                      locStr = city || country || '';
+                    }
                   }
                 } catch(geoErr) {
-                  console.log('地理编码请求超时，跳过位置信息');
+                  console.log('地理编码请求失败，跳过位置信息:', geoErr.message);
+                } finally {
+                  clearTimeout(timeoutId);
                 }
               } catch(e) {
                 console.log('Location fetch error:', e);
@@ -1795,12 +1921,14 @@ async function handleFile(file) {
             if (!hasLocation && !hasTime) {
               showCustom = true;
               document.getElementById('show-custom-toggle').checked = true;
-              document.getElementById('caption-input').value = 'Location, Time';
+              document.getElementById('caption-input').value = '';
+              document.getElementById('caption-input').placeholder = '请输入文字';
               document.getElementById('caption-input').style.display = 'block';
             } else {
               showCustom = false;
               document.getElementById('show-custom-toggle').checked = false;
               document.getElementById('caption-input').value = '';
+              document.getElementById('caption-input').placeholder = '输入文字';
               document.getElementById('caption-input').style.display = 'none';
             }
           }
@@ -2017,16 +2145,10 @@ function drawCanvas() {
     if (palette.length > 0) {
       selectedBg = palette[0];
       colorMode = 'solid';
-      console.log('Set default color:', selectedBg);
     } else {
       return;
     }
   }
-  console.log('drawCanvas called with:', {
-    colorMode: colorMode,
-    selectedBg: selectedBg,
-    selectedGradient: selectedGradient
-  });
   var rat = ratioMap[currentRatio];
   var W = 1080, H = Math.round(W / rat);
   canvas.width = W;
@@ -2177,6 +2299,40 @@ function drawCanvas() {
   
   var caption = parts.join(', ');
   
+  // 控制文字输入提示的显示
+  var textInputHint = document.getElementById('text-input-hint');
+  if (textInputHint) {
+    // 计算提示位置
+    var textX, textY;
+    if (currentLayout === 'bottom' || currentLayout === 'top') {
+      textX = W / 2;
+      textY = currentLayout === 'bottom' ? bgY + bgSize / 2 : bgY + bgSize / 2;
+    } else {
+      textX = bgX + bgSize / 2;
+      textY = H / 2;
+    }
+    
+    // 转换为预览区的实际位置
+    var canvasRect = canvas.getBoundingClientRect();
+    var previewRect = document.getElementById('preview-wrap').getBoundingClientRect();
+    var scaleX = previewRect.width / W;
+    var scaleY = previewRect.height / H;
+    var hintX = (textX * scaleX) + previewRect.left - canvasRect.left;
+    var hintY = (textY * scaleY) + previewRect.top - canvasRect.top;
+    
+    textInputHint.style.left = hintX + 'px';
+    textInputHint.style.top = hintY + 'px';
+    textInputHint.style.transform = 'translate(-50%, -50%)';
+    
+    // 显示/隐藏提示
+    var shouldShowHint = showCustom && !customCaption && !extractedLocation && !extractedTime;
+    if (shouldShowHint) {
+      textInputHint.classList.add('visible');
+    } else {
+      textInputHint.classList.remove('visible');
+    }
+  }
+  
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   var baseTextHW = (fontStyle === 'handwriting' ? W * 0.039 : W * 0.036) * userFontScale;
@@ -2195,35 +2351,24 @@ function drawCanvas() {
   if (caption) {
     ctx.fillStyle = selectedTextColor;
     ctx.letterSpacing = userLetterSpacing + 'px';
+    var fontStr;
     if (fontStyle === 'handwriting') {
-      ctx.font = '300 ' + Math.round(baseTextHW) + "px Georgia,'Times New Roman','STSong',serif";
-      ctx.fillText(caption, textX, textY);
+      fontStr = '300 ' + Math.round(baseTextHW) + "px Georgia,'Times New Roman','STSong',serif";
     } else if (fontStyle === 'modern') {
-      ctx.font = '500 ' + Math.round(baseTextHW) + "px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif";
-      ctx.fillText(caption, textX, textY);
+      fontStr = '500 ' + Math.round(baseTextHW) + "px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif";
     } else {
-      ctx.font = '400 ' + Math.round(baseTextHW) + "px 'Courier New',Courier,Consolas,monospace";
-      ctx.fillText(caption, textX, textY);
+      fontStr = '400 ' + Math.round(baseTextHW) + "px 'Courier New',Courier,Consolas,monospace";
     }
-  } else {
-    // Show placeholder when no content
-    var a = 0.22;
-    var inv = selectedBg && (selectedBg.r + selectedBg.g + selectedBg.b) > 380 ? 'rgba(0,0,0,' + a + ')' : 'rgba(255,255,255,' + a + ')';
-    ctx.fillStyle = inv;
-    ctx.letterSpacing = userLetterSpacing + 'px';
-    var ph, fm;
-    if (fontStyle === 'handwriting') {
-      ph = '300 ';
-      fm = "Georgia,'Times New Roman','STSong',serif";
-    } else if (fontStyle === 'modern') {
-      ph = '500 ';
-      fm = "-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif";
-    } else {
-      ph = '400 ';
-      fm = "'Courier New',Courier,Consolas,monospace";
-    }
-    ctx.font = ph + Math.round(baseTextHW) + 'px ' + fm;
-    ctx.fillText('Location, Time', textX, textY);
+    ctx.font = fontStr;
+    
+    // 处理换行
+    var lines = caption.split('\n');
+    var lineHeight = baseTextHW * 1.5; // 行高为字体大小的1.5倍
+    var startY = textY - (lines.length - 1) * lineHeight / 2;
+    
+    lines.forEach(function(line, index) {
+      ctx.fillText(line, textX, startY + index * lineHeight);
+    });
   }
 
   // Retro noise overlay - only apply to background area
@@ -2337,14 +2482,15 @@ function drawCanvas() {
   // Photo drag
   canvas.addEventListener('mousedown', function(e) { e.preventDefault(); photoD = true; canvas.classList.add('photo-dragging'); lx = e.clientX; ly = e.clientY; });
   canvas.addEventListener('touchstart', function(e) { 
-    e.preventDefault();
     if (e.touches.length === 2) {
       // 双指捏合缩放
+      e.preventDefault();
       initialPinchDistance = getPinchDistance(e.touches);
       initialPhotoScale = photoScale;
       photoD = false;
     } else if (e.touches.length === 1) {
       // 单指移动
+      e.preventDefault();
       photoD = true; 
       canvas.classList.add('photo-dragging'); 
       lx = e.touches[0].clientX; 
@@ -2359,7 +2505,7 @@ function drawCanvas() {
     e.preventDefault();
     var rect = canvas.getBoundingClientRect();
     photoOffsetX += (e.clientX - lx) / rect.width * 2;
-    photoOffsetY += (e.clientY - ly) / rect.height * 2;
+    photoOffsetY -= (e.clientY - ly) / rect.height * 2;
     photoOffsetX = Math.max(-1, Math.min(1, photoOffsetX));
     photoOffsetY = Math.max(-1, Math.min(1, photoOffsetY));
     lx = e.clientX; ly = e.clientY;
@@ -2388,7 +2534,7 @@ function drawCanvas() {
       var deltaY = (ty - ly) / rect.height * 2;
       // 添加惯性效果
       photoOffsetX += deltaX * 0.8;
-      photoOffsetY += deltaY * 0.8;
+      photoOffsetY -= deltaY * 0.8;
       photoOffsetX = Math.max(-1, Math.min(1, photoOffsetX));
       photoOffsetY = Math.max(-1, Math.min(1, photoOffsetY));
       lx = tx; ly = ty;
@@ -3153,9 +3299,6 @@ document.getElementById('show-custom-toggle').addEventListener('change', functio
   showCustom = this.checked;
   var input = document.getElementById('caption-input');
   input.style.display = showCustom ? 'block' : 'none';
-  if (showCustom && !input.value) {
-    input.value = 'Location, Time';
-  }
   drawCanvas();
 });
 </script>
