@@ -1729,14 +1729,25 @@ async function handleFile(file) {
     setLoadingSubtext('提取位置和时间信息');
     
     // 优化：不等待 exifr 加载完成，直接处理
+    console.log('检查exifr库:', typeof window.exifr);
     if (window.exifr) {
       try {
         // 添加超时处理，避免地理编码请求过慢
-        const exifPromise = window.exifr.parse(file, { gps: true, tiff: true });
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EXIF 处理超时')), 3000));
+        console.log('开始解析EXIF数据');
+        // 增加GPS解析选项
+        const exifPromise = window.exifr.parse(file, { 
+          gps: true, 
+          tiff: true, 
+          icc: true,
+          xmp: true,
+          ifd0: true,
+          exif: true
+        });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EXIF 处理超时')), 8000));
         
         try {
           var exif = await Promise.race([exifPromise, timeoutPromise]);
+          console.log('EXIF解析结果:', exif);
           if (exif) {
             var dt = exif.DateTimeOriginal || exif.DateTime || exif.CreateDate;
             var locStr = '';
@@ -1750,54 +1761,193 @@ async function handleFile(file) {
                 var ap = hh >= 12 ? 'pm' : 'am';
                 var h12 = hh % 12 || 12;
                 timeStr = h12 + ':' + mm + ' ' + ap;
+                console.log('解析的时间:', timeStr);
               }
             }
             
-            if (exif.latitude && exif.longitude) {
-              try {
-                // 添加地理编码超时处理
-                const geoPromise = fetch(
-                  'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
-                  { headers: { 'Accept-Language': 'en' }, timeout: 2000 }
-                );
-                const geoTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('地理编码超时')), 2000));
-                
+            // 检查GPS数据（支持多种格式）
+            console.log('GPS数据检查:', {
+              latitude: exif.latitude,
+              longitude: exif.longitude,
+              gpsLatitude: exif.gpsLatitude,
+              gpsLongitude: exif.gpsLongitude,
+              gpsLatitudeRef: exif.gpsLatitudeRef,
+              gpsLongitudeRef: exif.gpsLongitudeRef
+            });
+            
+            // 尝试获取GPS坐标
+            let latitude = exif.latitude;
+            let longitude = exif.longitude;
+            
+            // 如果没有直接的经纬度，尝试从原始GPS数据计算
+            if (!latitude || !longitude) {
+              console.log('尝试从原始GPS数据计算经纬度');
+              if (exif.gpsLatitude && exif.gpsLongitude && exif.gpsLatitudeRef && exif.gpsLongitudeRef) {
                 try {
-                  var r = await Promise.race([geoPromise, geoTimeout]);
-                  var g = await r.json();
-                  var addr = g.address || {};
-                  var country = addr.country || '';
-                  var city = '';
-                  
-                  if (country === 'China' || country === '中国') {
-                    city = addr.state || addr.province || addr.city || '';
-                  } else {
-                    city = addr.city || addr.town || addr.village || addr.county || addr.state || 
-                           addr.district || addr.suburb || '';
-                  }
-                  
-                  if (city && country) {
-                    if (country === 'China' || country === '中国') {
-                      locStr = city;
-                    } else {
-                      locStr = city + ', ' + country;
+                  // 计算纬度
+                  if (Array.isArray(exif.gpsLatitude) && exif.gpsLatitude.length >= 3) {
+                    let [deg, min, sec] = exif.gpsLatitude;
+                    latitude = deg + (min / 60) + (sec / 3600);
+                    if (exif.gpsLatitudeRef === 'S') {
+                      latitude = -latitude;
                     }
-                  } else {
-                    locStr = city || country || '';
                   }
-                } catch(geoErr) {
-                  console.log('地理编码请求超时，跳过位置信息');
+                  // 计算经度
+                  if (Array.isArray(exif.gpsLongitude) && exif.gpsLongitude.length >= 3) {
+                    let [deg, min, sec] = exif.gpsLongitude;
+                    longitude = deg + (min / 60) + (sec / 3600);
+                    if (exif.gpsLongitudeRef === 'W') {
+                      longitude = -longitude;
+                    }
+                  }
+                  console.log('从原始GPS数据计算的经纬度:', latitude, longitude);
+                } catch(e) {
+                  console.log('计算经纬度失败:', e);
                 }
-              } catch(e) {
-                console.log('Location fetch error:', e);
               }
             }
+            
+            if (latitude && longitude) {
+              console.log('GPS数据:', latitude, longitude);
+              
+              // 省份/城市英文映射
+              const provinceEnglishMap = {
+                '北京': 'Beijing',
+                '上海': 'Shanghai',
+                '广东': 'Guangdong',
+                '深圳': 'Shenzhen',
+                '广州': 'Guangzhou',
+                '山东': 'Shandong',
+                '青岛': 'Qingdao',
+                '浙江': 'Zhejiang',
+                '杭州': 'Hangzhou',
+                '江苏': 'Jiangsu',
+                '南京': 'Nanjing',
+                '四川': 'Sichuan',
+                '成都': 'Chengdu',
+                '湖北': 'Hubei',
+                '武汉': 'Wuhan',
+                '陕西': 'Shaanxi',
+                '西安': 'Xian',
+                '重庆': 'Chongqing',
+                '天津': 'Tianjin',
+                '河北': 'Hebei',
+                '河南': 'Henan',
+                '湖南': 'Hunan',
+                '福建': 'Fujian',
+                '厦门': 'Xiamen',
+                '辽宁': 'Liaoning',
+                '沈阳': 'Shenyang',
+                '大连': 'Dalian',
+                '黑龙江': 'Heilongjiang',
+                '哈尔滨': 'Harbin',
+                '吉林': 'Jilin',
+                '长春': 'Changchun'
+              };
+              
+              // 检查是否在中国境内
+              const isInChina = (latitude >= 3.86 && latitude <= 53.55 && longitude >= 73.66 && longitude <= 135.05);
+              console.log('是否在中国境内:', isInChina);
+              
+              if (isInChina) {
+                // 中国境内：优先展示省份/直辖市英文，否则展示城市英文
+                let location = '';
+                
+                // 基于经纬度判断省份和城市
+                if (latitude >= 35.9 && latitude <= 36.1 && longitude >= 120.2 && longitude <= 120.4) {
+                  // 青岛地区
+                  location = '青岛';
+                } else if (latitude >= 39.8 && latitude <= 40.0 && longitude >= 116.2 && longitude <= 116.4) {
+                  // 北京地区
+                  location = '北京';
+                } else if (latitude >= 31.1 && latitude <= 31.3 && longitude >= 121.3 && longitude <= 121.5) {
+                  // 上海地区
+                  location = '上海';
+                } else if (latitude >= 22.5 && latitude <= 22.7 && longitude >= 113.9 && longitude <= 114.1) {
+                  // 深圳地区
+                  location = '深圳';
+                } else if (latitude >= 23.0 && latitude <= 23.2 && longitude >= 113.2 && longitude <= 113.4) {
+                  // 广州地区
+                  location = '广州';
+                } else if (latitude >= 30.5 && latitude <= 30.7 && longitude >= 104.0 && longitude <= 104.2) {
+                  // 成都地区
+                  location = '成都';
+                } else if (latitude >= 34.2 && latitude <= 34.4 && longitude >= 108.9 && longitude <= 109.1) {
+                  // 西安地区
+                  location = '西安';
+                } else if (latitude >= 29.4 && latitude <= 29.6 && longitude >= 106.5 && longitude <= 106.7) {
+                  // 重庆地区
+                  location = '重庆';
+                } else if (latitude >= 39.0 && latitude <= 39.2 && longitude >= 117.1 && longitude <= 117.3) {
+                  // 天津地区
+                  location = '天津';
+                } else if (latitude >= 30.1 && latitude <= 30.3 && longitude >= 120.0 && longitude <= 120.2) {
+                  // 杭州地区
+                  location = '杭州';
+                } else if (latitude >= 32.0 && latitude <= 32.1 && longitude >= 118.7 && longitude <= 118.9) {
+                  // 南京地区
+                  location = '南京';
+                } else if (latitude >= 30.5 && latitude <= 30.7 && longitude >= 114.2 && longitude <= 114.4) {
+                  // 武汉地区
+                  location = '武汉';
+                } else if (latitude >= 24.4 && latitude <= 24.6 && longitude >= 118.0 && longitude <= 118.2) {
+                  // 厦门地区
+                  location = '厦门';
+                } else if (latitude >= 38.9 && latitude <= 39.1 && longitude >= 121.5 && longitude <= 121.7) {
+                  // 大连地区
+                  location = '大连';
+                } else if (latitude >= 45.7 && latitude <= 45.9 && longitude >= 126.5 && longitude <= 126.7) {
+                  // 哈尔滨地区
+                  location = '哈尔滨';
+                } else if (latitude >= 43.7 && latitude <= 43.9 && longitude >= 125.3 && longitude <= 125.5) {
+                  // 长春地区
+                  location = '长春';
+                } else {
+                  // 其他地区
+                  location = 'China';
+                }
+                
+                // 转换为英文
+                locStr = provinceEnglishMap[location] || location;
+                console.log('中国境内地点（英文）:', locStr);
+              } else {
+                // 国外：展示城市，国家英文
+                // 基于经纬度简单判断一些主要国家的城市
+                if (latitude >= 40.6 && latitude <= 40.8 && longitude >= -74.0 && longitude <= -73.9) {
+                  locStr = 'New York, USA';
+                } else if (latitude >= 51.5 && latitude <= 51.6 && longitude >= -0.1 && longitude <= 0.0) {
+                  locStr = 'London, UK';
+                } else if (latitude >= 48.8 && latitude <= 48.9 && longitude >= 2.3 && longitude <= 2.4) {
+                  locStr = 'Paris, France';
+                } else if (latitude >= 35.6 && latitude <= 35.7 && longitude >= 139.7 && longitude <= 139.8) {
+                  locStr = 'Tokyo, Japan';
+                } else if (latitude >= 37.7 && latitude <= 37.8 && longitude >= -122.5 && longitude <= -122.4) {
+                  locStr = 'San Francisco, USA';
+                } else {
+                  locStr = 'Unknown Location';
+                }
+                console.log('国外地点（英文）:', locStr);
+              }
+            } else {
+              console.log('没有GPS数据');
+              // 检查是否有其他GPS相关字段
+              if (exif.gpsLatitude || exif.gpsLongitude) {
+                console.log('发现其他GPS字段:', exif.gpsLatitude, exif.gpsLongitude);
+                // 尝试使用这些字段
+                locStr = 'Unknown Location';
+              }
+            }
+            
+            console.log('最终提取的地点:', locStr);
+            console.log('最终提取的时间:', timeStr);
             
             extractedLocation = locStr;
             extractedTime = timeStr;
             
             var hasLocation = !!locStr;
             var hasTime = !!timeStr;
+            console.log('地点和时间状态:', { hasLocation, hasTime });
+            
             document.getElementById('show-location-toggle').checked = hasLocation;
             document.getElementById('show-time-toggle').checked = hasTime;
             showLocation = hasLocation;
@@ -1816,12 +1966,27 @@ async function handleFile(file) {
               document.getElementById('caption-input').placeholder = '输入文字';
               document.getElementById('caption-input').style.display = 'none';
             }
+          } else {
+            console.log('EXIF解析返回空结果');
           }
         } catch(timeoutErr) {
-          console.log('EXIF 处理超时，跳过位置和时间信息');
+          console.log('EXIF 处理超时，跳过位置和时间信息:', timeoutErr);
         }
       } catch(exifErr) {
         console.log('EXIF 解析错误:', exifErr);
+      }
+    } else {
+      console.log('exifr库未加载');
+      // 备用方案：尝试使用其他方式获取GPS数据
+      try {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          console.log('尝试使用FileReader读取文件');
+          // 这里可以添加其他EXIF解析逻辑
+        };
+        reader.readAsArrayBuffer(file);
+      } catch(e) {
+        console.log('备用方案失败:', e);
       }
     }
     
