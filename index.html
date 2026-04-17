@@ -1451,17 +1451,21 @@ function extractPalette(img, k) {
 // EXIF
 var exifrReady = false;
 var exifrLoadError = false;
-var es = document.createElement('script');
-es.src = 'https://unpkg.com/exifr@7.1.3/dist/full.umd.js';
-es.onload = function() { 
-  console.log('exifr 库加载成功');
-  exifrReady = true; 
-};
-es.onerror = function() {
-  console.log('exifr 库加载失败');
-  exifrLoadError = true;
-};
-document.head.appendChild(es);
+var exifrLoadedPromise = new Promise(function(resolve, reject) {
+  var es = document.createElement('script');
+  es.src = 'https://unpkg.com/exifr@7.1.3/dist/full.umd.js';
+  es.onload = function() { 
+    console.log('exifr 库加载成功');
+    exifrReady = true;
+    resolve();
+  };
+  es.onerror = function() {
+    console.log('exifr 库加载失败');
+    exifrLoadError = true;
+    reject();
+  };
+  document.head.appendChild(es);
+});
 
 // State
 var imgEl = null;
@@ -1736,34 +1740,27 @@ async function handleFile(file) {
     setLoadingText('优化效果...');
     setLoadingSubtext('提取位置和时间信息');
     
-    console.log('开始处理 EXIF 数据');
-    console.log('文件信息:', { name: file.name, size: file.size, type: file.type });
-    
-    // 等待 exifr 库加载完成（最多等待 5 秒）
-    var waitCount = 0;
-    while (!window.exifr && waitCount < 50) {
-      await new Promise(r => setTimeout(r, 100));
-      waitCount++;
+    // 等待 exifr 库加载完成（最多 5 秒）
+    try {
+      await Promise.race([
+        exifrLoadedPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('exifr 加载超时')), 5000))
+      ]);
+    } catch(e) {
+      console.log('等待 exifr 加载失败:', e);
     }
     
-    console.log('exifr 库状态:', { loaded: !!window.exifr, waitCount: waitCount });
-    
-    // 优化：不等待 exifr 加载完成，直接处理
+    // 处理 EXIF 数据
     if (window.exifr) {
       try {
-        console.log('开始解析 EXIF 数据');
         // 添加超时处理，避免地理编码请求过慢
         const exifPromise = window.exifr.parse(file, { gps: true, tiff: true });
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EXIF 处理超时')), 5000));
         
         try {
           var exif = await Promise.race([exifPromise, timeoutPromise]);
-          console.log('EXIF 解析结果:', exif);
-          
           if (exif) {
             var dt = exif.DateTimeOriginal || exif.DateTime || exif.CreateDate;
-            console.log('时间信息:', { DateTimeOriginal: exif.DateTimeOriginal, DateTime: exif.DateTime, CreateDate: exif.CreateDate });
-            
             var locStr = '';
             var timeStr = '';
             
@@ -1778,10 +1775,8 @@ async function handleFile(file) {
               }
             }
             
-            console.log('GPS 信息:', { latitude: exif.latitude, longitude: exif.longitude });
             if (exif.latitude && exif.longitude) {
               try {
-                console.log('开始地理编码请求');
                 // 添加地理编码超时处理
                 const geoPromise = fetch(
                   'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
@@ -1792,8 +1787,6 @@ async function handleFile(file) {
                 try {
                   var r = await Promise.race([geoPromise, geoTimeout]);
                   var g = await r.json();
-                  console.log('地理编码结果:', g);
-                  
                   var addr = g.address || {};
                   var country = addr.country || '';
                   var city = '';
@@ -1814,9 +1807,8 @@ async function handleFile(file) {
                   } else {
                     locStr = city || country || '';
                   }
-                  console.log('最终位置字符串:', locStr);
                 } catch(geoErr) {
-                  console.log('地理编码请求超时，跳过位置信息:', geoErr);
+                  console.log('地理编码请求超时，跳过位置信息');
                 }
               } catch(e) {
                 console.log('Location fetch error:', e);
@@ -1846,13 +1838,11 @@ async function handleFile(file) {
             }
           }
         } catch(timeoutErr) {
-          console.log('EXIF 处理超时，跳过位置和时间信息:', timeoutErr);
+          console.log('EXIF 处理超时，跳过位置和时间信息');
         }
       } catch(exifErr) {
         console.log('EXIF 解析错误:', exifErr);
       }
-    } else {
-      console.log('exifr 库未加载，无法解析 EXIF 数据');
     }
     
     updateProgress(90);
