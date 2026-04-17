@@ -1782,17 +1782,21 @@ async function handleFile(file) {
             }
             
             if (exif.latitude && exif.longitude) {
+              console.log('GPS 坐标:', exif.latitude, exif.longitude);
               try {
-                // 添加地理编码超时处理
+                // 增加地理编码超时时间
                 const geoPromise = fetch(
                   'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
                   { headers: { 'Accept-Language': 'en' } }
                 );
-                const geoTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('地理编码超时')), 3000));
+                const geoTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('地理编码超时')), 8000));
                 
                 try {
+                  console.log('开始地理编码请求...');
                   var r = await Promise.race([geoPromise, geoTimeout]);
+                  console.log('地理编码请求成功，状态码:', r.status);
                   var g = await r.json();
+                  console.log('地理编码结果:', g);
                   var addr = g.address || {};
                   var country = addr.country || '';
                   var city = '';
@@ -1813,11 +1817,18 @@ async function handleFile(file) {
                   } else {
                     locStr = city || country || '';
                   }
+                  console.log('最终位置:', locStr);
                 } catch(geoErr) {
-                  console.log('地理编码请求超时，跳过位置信息');
+                  console.log('地理编码请求超时，跳过位置信息:', geoErr);
+                  // 备用方案：直接使用经纬度作为位置
+                  locStr = exif.latitude.toFixed(4) + ', ' + exif.longitude.toFixed(4);
+                  console.log('使用经纬度作为备用位置:', locStr);
                 }
               } catch(e) {
                 console.log('Location fetch error:', e);
+                // 备用方案：直接使用经纬度作为位置
+                locStr = exif.latitude.toFixed(4) + ', ' + exif.longitude.toFixed(4);
+                console.log('使用经纬度作为备用位置:', locStr);
               }
             }
             
