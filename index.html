@@ -1506,15 +1506,8 @@ function initWelcomeModal() {
   
   // 检查是否在显示日期范围内
   if (todayStr >= startDate && todayStr <= endDate) {
-    // 检查今天是否已经显示过
-    var lastShownDate = localStorage.getItem('welcomeModalLastShown');
-    if (lastShownDate !== todayStr) {
-      // 显示弹窗
-      welcomeModal.classList.add('visible');
-      
-      // 标记今天已显示
-      localStorage.setItem('welcomeModalLastShown', todayStr);
-    }
+    // 17号和18号每次打开都显示弹窗
+    welcomeModal.classList.add('visible');
   }
 }
 
@@ -2396,7 +2389,7 @@ function drawCanvas() {
     if (!photoD) return;
     e.preventDefault();
     var rect = canvas.getBoundingClientRect();
-    photoOffsetX += (e.clientX - lx) / rect.width * 2;
+    photoOffsetX -= (e.clientX - lx) / rect.width * 2;
     photoOffsetY -= (e.clientY - ly) / rect.height * 2;
     photoOffsetX = Math.max(-1, Math.min(1, photoOffsetX));
     photoOffsetY = Math.max(-1, Math.min(1, photoOffsetY));
@@ -2425,7 +2418,7 @@ function drawCanvas() {
       var deltaX = (tx - lx) / rect.width * 2;
       var deltaY = (ty - ly) / rect.height * 2;
       // 添加惯性效果
-      photoOffsetX += deltaX * 0.8;
+      photoOffsetX -= deltaX * 0.8;
       photoOffsetY -= deltaY * 0.8;
       photoOffsetX = Math.max(-1, Math.min(1, photoOffsetX));
       photoOffsetY = Math.max(-1, Math.min(1, photoOffsetY));
