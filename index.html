@@ -2958,7 +2958,7 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
           '<div class="cp-gradient-preview" id="cp-gradient-preview"></div>' +
         '</div>' +
         '<div class="cp-presets" id="cp-presets"></div>' +
-        '<input type="color" id="cp-color-input" value="#ffffff" style="display: none;"/>' +
+        '<input type="color" id="cp-color-input" value="#ffffff" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;"/>' +
         '<button class="cp-confirm-btn" id="cp-confirm-gradient" disabled>确认添加渐变</button>';
       
       // 隐藏颜色输入框但保持功能
@@ -2976,21 +2976,37 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
       popover.classList.add('gradient-mode');
       
       // 绑定渐变颜色选择事件
-      document.getElementById('cp-gradient-start').addEventListener('click', function() {
-        setGradientTarget('start');
-        // 点击颜色圆圈时触发颜色选择器
+      function triggerColorPicker(target) {
+        setGradientTarget(target);
         var colorInput = document.getElementById('cp-color-input');
         if (colorInput) {
-          colorInput.click();
+          // 尝试多种方法触发颜色选择器
+          try {
+            // 方法1：直接点击
+            colorInput.click();
+          } catch (e) {
+            console.log('点击触发失败:', e);
+          }
+          
+          // 方法2：创建触摸事件
+          try {
+            var touchEvent = new TouchEvent('touchstart', {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            });
+            colorInput.dispatchEvent(touchEvent);
+          } catch (e) {
+            console.log('触摸事件触发失败:', e);
+          }
         }
+      }
+      
+      document.getElementById('cp-gradient-start').addEventListener('click', function() {
+        triggerColorPicker('start');
       });
       document.getElementById('cp-gradient-end').addEventListener('click', function() {
-        setGradientTarget('end');
-        // 点击颜色圆圈时触发颜色选择器
-        var colorInput = document.getElementById('cp-color-input');
-        if (colorInput) {
-          colorInput.click();
-        }
+        triggerColorPicker('end');
       });
       
       // 为颜色圆圈本身也添加点击事件
@@ -2998,23 +3014,31 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
       if (startCircle) {
         startCircle.addEventListener('click', function(e) {
           e.stopPropagation();
-          setGradientTarget('start');
-          var colorInput = document.getElementById('cp-color-input');
-          if (colorInput) {
-            colorInput.click();
-          }
+          triggerColorPicker('start');
         });
       }
       var endCircle = document.querySelector('#cp-gradient-end .color-circle');
       if (endCircle) {
         endCircle.addEventListener('click', function(e) {
           e.stopPropagation();
-          setGradientTarget('end');
-          var colorInput = document.getElementById('cp-color-input');
-          if (colorInput) {
-            colorInput.click();
-          }
+          triggerColorPicker('end');
         });
+      }
+      
+      // 添加触摸事件支持
+      if (startCircle) {
+        startCircle.addEventListener('touchstart', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerColorPicker('start');
+        }, { passive: false });
+      }
+      if (endCircle) {
+        endCircle.addEventListener('touchstart', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerColorPicker('end');
+        }, { passive: false });
       }
       
       document.getElementById('cp-confirm-gradient').addEventListener('click', function() {
