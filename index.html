@@ -1833,15 +1833,20 @@ async function handleFile(file) {
                       // 尝试从display_name中提取城市
                       var parts = displayName.split(', ');
                       
-                      // 直接查找城市名称（对于中国地址，城市通常在省份前面）
+                      // 从后往前找，跳过国家、邮编、省份，找到城市
                       var foundCity = false;
+                      var skippedProvince = false;
                       
-                      // 从前往后找，找到城市
-                      for (var i = 0; i < parts.length; i++) {
+                      for (var i = parts.length - 1; i >= 0; i--) {
                         var part = parts[i].trim();
                         
-                        // 跳过建筑物名称
-                        if (i === 0) {
+                        // 跳过国家
+                        if (part === 'China' || part === '中国') {
+                          continue;
+                        }
+                        
+                        // 跳过邮编
+                        if (/^\d+$/.test(part)) {
                           continue;
                         }
                         
@@ -1855,13 +1860,14 @@ async function handleFile(file) {
                           continue;
                         }
                         
-                        // 跳过邮编
-                        if (/^\d+$/.test(part)) {
+                        // 跳过建筑物名称
+                        if (i === 0) {
                           continue;
                         }
                         
-                        // 跳过国家
-                        if (part === 'China' || part === '中国') {
+                        // 如果还没有跳过省份，现在这个部分可能是省份，跳过它，继续往前找城市
+                        if (!skippedProvince) {
+                          skippedProvince = true;
                           continue;
                         }
                         
@@ -1871,7 +1877,7 @@ async function handleFile(file) {
                         break;
                       }
                       
-                      // 如果没有找到城市，尝试从后往前找
+                      // 如果没有找到城市（可能是因为只有省份没有城市），尝试直接找城市
                       if (!foundCity) {
                         for (var j = parts.length - 1; j >= 0; j--) {
                           var part = parts[j].trim();
@@ -1901,7 +1907,7 @@ async function handleFile(file) {
                             continue;
                           }
                           
-                          // 找到城市
+                          // 找到城市或省份
                           locationParts.push(part);
                           foundCity = true;
                           break;
