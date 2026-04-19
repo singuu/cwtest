@@ -1799,22 +1799,47 @@ async function handleFile(file) {
                   console.log('地理编码结果:', g);
                   var addr = g.address || {};
                   var country = addr.country || '';
-                  var city = '';
-                  
-                  if (country === 'China' || country === '中国') {
-                    city = addr.state || addr.province || addr.city || '';
-                  } else {
-                    city = addr.city || addr.town || addr.village || addr.county || addr.state || 
-                           addr.district || addr.suburb || '';
-                  }
                   
                   // 尝试获取更多位置信息
                   var locationParts = [];
                   
                   // 对于中国，只使用省份和城市（不包含区县）
                   if (country === 'China' || country === '中国') {
-                    if (addr.province) locationParts.push(addr.province);
-                    if (addr.city) locationParts.push(addr.city);
+                    // 只添加省份和城市，不添加区县
+                    // 尝试不同的字段名，确保能正确获取省份和城市
+                    var province = addr.province || addr.state || '';
+                    var city = addr.city || '';
+                    
+                    // 避免添加区县信息
+                    if (province && !province.includes('区') && !province.includes('District')) {
+                      locationParts.push(province);
+                    }
+                    if (city && !city.includes('区') && !city.includes('District')) {
+                      locationParts.push(city);
+                    }
+                    
+                    // 特殊处理：如果没有省份和城市，尝试从display_name中提取
+                    if (locationParts.length === 0 && g.display_name) {
+                      var displayName = g.display_name;
+                      // 尝试从display_name中提取省份和城市
+                      var parts = displayName.split(', ');
+                      for (var i = parts.length - 1; i >= 0; i--) {
+                        var part = parts[i].trim();
+                        // 跳过区县、街道等信息
+                        if (part.includes('区') || part.includes('District') || part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street')) {
+                          continue;
+                        }
+                        // 跳过国家
+                        if (part === 'China' || part === '中国') {
+                          continue;
+                        }
+                        // 添加省份或城市
+                        locationParts.unshift(part);
+                        if (locationParts.length >= 2) {
+                          break;
+                        }
+                      }
+                    }
                   } else {
                     // 对于其他国家，使用城市和国家
                     if (addr.city) locationParts.push(addr.city);
