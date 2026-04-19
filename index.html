@@ -1803,26 +1803,39 @@ async function handleFile(file) {
                   // 尝试获取更多位置信息
                   var locationParts = [];
                   
-                  // 对于中国，只使用省份和城市（不包含区县）
+                  // 对于中国，只使用城市或省份（不包含区县）
                   if (country === 'China' || country === '中国') {
-                    // 只添加省份和城市，不添加区县
                     // 尝试不同的字段名，确保能正确获取省份和城市
                     var province = addr.province || addr.state || '';
                     var city = addr.city || '';
                     
                     // 避免添加区县信息
-                    if (province && !province.includes('区') && !province.includes('District')) {
-                      locationParts.push(province);
-                    }
+                    var validCity = '';
+                    var validProvince = '';
+                    
                     if (city && !city.includes('区') && !city.includes('District')) {
-                      locationParts.push(city);
+                      validCity = city;
+                    }
+                    if (province && !province.includes('区') && !province.includes('District')) {
+                      validProvince = province;
+                    }
+                    
+                    // 优先显示城市，如果没有城市再显示省份
+                    if (validCity) {
+                      locationParts.push(validCity);
+                    } else if (validProvince) {
+                      locationParts.push(validProvince);
                     }
                     
                     // 特殊处理：如果没有省份和城市，尝试从display_name中提取
                     if (locationParts.length === 0 && g.display_name) {
                       var displayName = g.display_name;
-                      // 尝试从display_name中提取省份和城市
+                      // 尝试从display_name中提取城市和省份
                       var parts = displayName.split(', ');
+                      var foundCity = false;
+                      var foundProvince = false;
+                      
+                      // 从后往前找，先找城市，再找省份
                       for (var i = parts.length - 1; i >= 0; i--) {
                         var part = parts[i].trim();
                         // 跳过区县、街道等信息
@@ -1833,9 +1846,15 @@ async function handleFile(file) {
                         if (part === 'China' || part === '中国') {
                           continue;
                         }
-                        // 添加省份或城市
-                        locationParts.unshift(part);
-                        if (locationParts.length >= 2) {
+                        
+                        // 检查是否已经找到城市
+                        if (!foundCity) {
+                          // 假设这是城市
+                          locationParts.unshift(part);
+                          foundCity = true;
+                        } else if (!foundProvince) {
+                          // 假设这是省份
+                          // 但如果已经有城市，就不再添加省份
                           break;
                         }
                       }
