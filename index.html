@@ -1811,11 +1811,10 @@ async function handleFile(file) {
                   // 尝试获取更多位置信息
                   var locationParts = [];
                   
-                  // 对于中国，优先使用省份和城市
+                  // 对于中国，只使用省份和城市（不包含区县）
                   if (country === 'China' || country === '中国') {
                     if (addr.province) locationParts.push(addr.province);
                     if (addr.city) locationParts.push(addr.city);
-                    if (addr.district) locationParts.push(addr.district);
                   } else {
                     // 对于其他国家，使用城市和国家
                     if (addr.city) locationParts.push(addr.city);
