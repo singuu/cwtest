@@ -1786,7 +1786,7 @@ async function handleFile(file) {
               try {
                 // 增加地理编码超时时间
                 const geoPromise = fetch(
-                  'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json',
+                  'https://nominatim.openstreetmap.org/reverse?lat=' + exif.latitude + '&lon=' + exif.longitude + '&format=json&accept-language=en',
                   { headers: { 'Accept-Language': 'en' } }
                 );
                 const geoTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('地理编码超时')), 8000));
@@ -1808,27 +1808,44 @@ async function handleFile(file) {
                            addr.district || addr.suburb || '';
                   }
                   
-                  if (city && country) {
-                    if (country === 'China' || country === '中国') {
-                      locStr = city;
-                    } else {
-                      locStr = city + ', ' + country;
-                    }
+                  // 尝试获取更多位置信息
+                  var locationParts = [];
+                  
+                  // 对于中国，优先使用省份和城市
+                  if (country === 'China' || country === '中国') {
+                    if (addr.province) locationParts.push(addr.province);
+                    if (addr.city) locationParts.push(addr.city);
+                    if (addr.district) locationParts.push(addr.district);
                   } else {
-                    locStr = city || country || '';
+                    // 对于其他国家，使用城市和国家
+                    if (addr.city) locationParts.push(addr.city);
+                    else if (addr.town) locationParts.push(addr.town);
+                    else if (addr.village) locationParts.push(addr.village);
+                    else if (addr.county) locationParts.push(addr.county);
+                    else if (addr.state) locationParts.push(addr.state);
+                    else if (addr.district) locationParts.push(addr.district);
+                    else if (addr.suburb) locationParts.push(addr.suburb);
+                    
+                    if (country) locationParts.push(country);
+                  }
+                  
+                  // 如果有位置信息，使用它
+                  if (locationParts.length > 0) {
+                    locStr = locationParts.join(', ');
+                  } else {
+                    // 如果没有任何位置信息，保持为空
+                    locStr = '';
                   }
                   console.log('最终位置:', locStr);
                 } catch(geoErr) {
                   console.log('地理编码请求超时，跳过位置信息:', geoErr);
-                  // 备用方案：直接使用经纬度作为位置
-                  locStr = exif.latitude.toFixed(4) + ', ' + exif.longitude.toFixed(4);
-                  console.log('使用经纬度作为备用位置:', locStr);
+                  // 不使用经纬度作为备用，保持为空
+                  locStr = '';
                 }
               } catch(e) {
                 console.log('Location fetch error:', e);
-                // 备用方案：直接使用经纬度作为位置
-                locStr = exif.latitude.toFixed(4) + ', ' + exif.longitude.toFixed(4);
-                console.log('使用经纬度作为备用位置:', locStr);
+                // 不使用经纬度作为备用，保持为空
+                locStr = '';
               }
             }
             
@@ -1856,10 +1873,20 @@ async function handleFile(file) {
           }
         } catch(timeoutErr) {
           console.log('EXIF 处理超时，跳过位置和时间信息');
+          // 确保变量被初始化
+          extractedLocation = '';
+          extractedTime = '';
         }
       } catch(exifErr) {
         console.log('EXIF 解析错误:', exifErr);
+        // 确保变量被初始化
+        extractedLocation = '';
+        extractedTime = '';
       }
+    } else {
+      // exifr 库加载失败，确保变量被初始化
+      extractedLocation = '';
+      extractedTime = '';
     }
     
     updateProgress(90);
