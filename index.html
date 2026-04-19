@@ -1830,20 +1830,28 @@ async function handleFile(file) {
                     // 特殊处理：如果没有省份和城市，尝试从display_name中提取
                     if (locationParts.length === 0 && g.display_name) {
                       var displayName = g.display_name;
-                      // 尝试从display_name中提取城市和省份
+                      // 尝试从display_name中提取城市
                       var parts = displayName.split(', ');
                       
-                      // 从后往前找，跳过国家，然后找到城市
-                      for (var i = parts.length - 1; i >= 0; i--) {
+                      // 直接查找城市名称（对于中国地址，城市通常在省份前面）
+                      var foundCity = false;
+                      
+                      // 从前往后找，找到城市
+                      for (var i = 0; i < parts.length; i++) {
                         var part = parts[i].trim();
                         
-                        // 跳过国家
-                        if (part === 'China' || part === '中国') {
+                        // 跳过建筑物名称
+                        if (i === 0) {
                           continue;
                         }
                         
-                        // 跳过区县、街道等信息
-                        if (part.includes('区') || part.includes('District') || part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street') || part.includes('号') || part.includes('No.')) {
+                        // 跳过区县
+                        if (part.includes('区') || part.includes('District')) {
+                          continue;
+                        }
+                        
+                        // 跳过街道、路等
+                        if (part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street') || part.includes('号') || part.includes('No.')) {
                           continue;
                         }
                         
@@ -1852,9 +1860,52 @@ async function handleFile(file) {
                           continue;
                         }
                         
-                        // 找到第一个非区县、非街道、非国家的部分，假设是城市
+                        // 跳过国家
+                        if (part === 'China' || part === '中国') {
+                          continue;
+                        }
+                        
+                        // 找到城市
                         locationParts.push(part);
+                        foundCity = true;
                         break;
+                      }
+                      
+                      // 如果没有找到城市，尝试从后往前找
+                      if (!foundCity) {
+                        for (var j = parts.length - 1; j >= 0; j--) {
+                          var part = parts[j].trim();
+                          
+                          // 跳过国家
+                          if (part === 'China' || part === '中国') {
+                            continue;
+                          }
+                          
+                          // 跳过邮编
+                          if (/^\d+$/.test(part)) {
+                            continue;
+                          }
+                          
+                          // 跳过区县
+                          if (part.includes('区') || part.includes('District')) {
+                            continue;
+                          }
+                          
+                          // 跳过街道、路等
+                          if (part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street') || part.includes('号') || part.includes('No.')) {
+                            continue;
+                          }
+                          
+                          // 跳过建筑物名称
+                          if (j === 0) {
+                            continue;
+                          }
+                          
+                          // 找到城市
+                          locationParts.push(part);
+                          foundCity = true;
+                          break;
+                        }
                       }
                     }
                   } else {
