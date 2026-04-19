@@ -2958,7 +2958,7 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
           '<div class="cp-gradient-preview" id="cp-gradient-preview"></div>' +
         '</div>' +
         '<div class="cp-presets" id="cp-presets"></div>' +
-        '<input type="color" id="cp-color-input" value="#ffffff" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;"/>' +
+        '<input type="color" id="cp-color-input" value="#ffffff" style="position: absolute; width: 100%; height: 100%; opacity: 0; pointer-events: auto; z-index: 10;"/>' +
         '<button class="cp-confirm-btn" id="cp-confirm-gradient" disabled>确认添加渐变</button>';
       
       // 隐藏颜色输入框但保持功能
@@ -2976,68 +2976,63 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
       popover.classList.add('gradient-mode');
       
       // 绑定渐变颜色选择事件
-      function triggerColorPicker(target) {
+      function setActiveTarget(target) {
         setGradientTarget(target);
+        // 同步颜色输入框的值
         var colorInput = document.getElementById('cp-color-input');
         if (colorInput) {
-          // 尝试多种方法触发颜色选择器
-          try {
-            // 方法1：直接点击
-            colorInput.click();
-          } catch (e) {
-            console.log('点击触发失败:', e);
-          }
-          
-          // 方法2：创建触摸事件
-          try {
-            var touchEvent = new TouchEvent('touchstart', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            colorInput.dispatchEvent(touchEvent);
-          } catch (e) {
-            console.log('触摸事件触发失败:', e);
+          var activeColor = gradientPickerState.activeTarget === 'start' 
+            ? gradientPickerState.start 
+            : gradientPickerState.end;
+          if (activeColor) {
+            colorInput.value = rgbToHex(activeColor.r, activeColor.g, activeColor.b);
           }
         }
       }
       
-      document.getElementById('cp-gradient-start').addEventListener('click', function() {
-        triggerColorPicker('start');
-      });
-      document.getElementById('cp-gradient-end').addEventListener('click', function() {
-        triggerColorPicker('end');
-      });
-      
-      // 为颜色圆圈本身也添加点击事件
+      // 为颜色圆圈添加点击事件，只设置目标，不触发选择器
       var startCircle = document.querySelector('#cp-gradient-start .color-circle');
       if (startCircle) {
         startCircle.addEventListener('click', function(e) {
           e.stopPropagation();
-          triggerColorPicker('start');
+          setActiveTarget('start');
         });
+        startCircle.addEventListener('touchstart', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveTarget('start');
+        }, { passive: false });
       }
       var endCircle = document.querySelector('#cp-gradient-end .color-circle');
       if (endCircle) {
         endCircle.addEventListener('click', function(e) {
           e.stopPropagation();
-          triggerColorPicker('end');
+          setActiveTarget('end');
         });
-      }
-      
-      // 添加触摸事件支持
-      if (startCircle) {
-        startCircle.addEventListener('touchstart', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          triggerColorPicker('start');
-        }, { passive: false });
-      }
-      if (endCircle) {
         endCircle.addEventListener('touchstart', function(e) {
           e.preventDefault();
           e.stopPropagation();
-          triggerColorPicker('end');
+          setActiveTarget('end');
+        }, { passive: false });
+      }
+      
+      // 为整个渐变选择区域添加点击事件
+      var gradientPicker = document.querySelector('.cp-gradient-picker');
+      if (gradientPicker) {
+        gradientPicker.addEventListener('click', function(e) {
+          e.stopPropagation();
+          // 确保有一个活跃的目标
+          if (!gradientPickerState.activeTarget) {
+            setActiveTarget('start');
+          }
+        });
+        gradientPicker.addEventListener('touchstart', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          // 确保有一个活跃的目标
+          if (!gradientPickerState.activeTarget) {
+            setActiveTarget('start');
+          }
         }, { passive: false });
       }
       
