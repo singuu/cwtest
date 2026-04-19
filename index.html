@@ -1093,8 +1093,6 @@
       align-items: center;
       gap: 12px;
       padding: 8px 0;
-      border-top: 1px solid #333;
-      border-bottom: 1px solid #333;
     }
     .cp-gradient-colors {
       display: flex;
@@ -2946,12 +2944,6 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
     if (isGradientMode) {
       // 渐变模式：显示两个颜色选择
       popover.innerHTML =
-        '<div class="cp-header">' +
-          '<div class="cp-input-wrap">' +
-            '<div class="cp-label">自定义颜色</div>' +
-            '<input type="color" id="cp-color-input" value="#ffffff"/>' +
-          '</div>' +
-        '</div>' +
         '<div class="cp-gradient-picker">' +
           '<div class="cp-gradient-colors">' +
             '<div class="cp-gradient-color" id="cp-gradient-start" data-target="start">' +
@@ -2966,7 +2958,10 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
           '<div class="cp-gradient-preview" id="cp-gradient-preview"></div>' +
         '</div>' +
         '<div class="cp-presets" id="cp-presets"></div>' +
+        '<input type="color" id="cp-color-input" value="#ffffff" style="display: none;"/>' +
         '<button class="cp-confirm-btn" id="cp-confirm-gradient" disabled>确认添加渐变</button>';
+      
+      // 隐藏颜色输入框但保持功能
       
       // 移除取色相关的事件监听器
       try {
@@ -2983,10 +2978,44 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
       // 绑定渐变颜色选择事件
       document.getElementById('cp-gradient-start').addEventListener('click', function() {
         setGradientTarget('start');
+        // 点击颜色圆圈时触发颜色选择器
+        var colorInput = document.getElementById('cp-color-input');
+        if (colorInput) {
+          colorInput.click();
+        }
       });
       document.getElementById('cp-gradient-end').addEventListener('click', function() {
         setGradientTarget('end');
+        // 点击颜色圆圈时触发颜色选择器
+        var colorInput = document.getElementById('cp-color-input');
+        if (colorInput) {
+          colorInput.click();
+        }
       });
+      
+      // 为颜色圆圈本身也添加点击事件
+      var startCircle = document.querySelector('#cp-gradient-start .color-circle');
+      if (startCircle) {
+        startCircle.addEventListener('click', function(e) {
+          e.stopPropagation();
+          setGradientTarget('start');
+          var colorInput = document.getElementById('cp-color-input');
+          if (colorInput) {
+            colorInput.click();
+          }
+        });
+      }
+      var endCircle = document.querySelector('#cp-gradient-end .color-circle');
+      if (endCircle) {
+        endCircle.addEventListener('click', function(e) {
+          e.stopPropagation();
+          setGradientTarget('end');
+          var colorInput = document.getElementById('cp-color-input');
+          if (colorInput) {
+            colorInput.click();
+          }
+        });
+      }
       
       document.getElementById('cp-confirm-gradient').addEventListener('click', function() {
         confirmGradient();
