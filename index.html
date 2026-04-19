@@ -1832,31 +1832,29 @@ async function handleFile(file) {
                       var displayName = g.display_name;
                       // 尝试从display_name中提取城市和省份
                       var parts = displayName.split(', ');
-                      var foundCity = false;
-                      var foundProvince = false;
                       
-                      // 从后往前找，先找城市，再找省份
+                      // 从后往前找，跳过国家，然后找到城市
                       for (var i = parts.length - 1; i >= 0; i--) {
                         var part = parts[i].trim();
-                        // 跳过区县、街道等信息
-                        if (part.includes('区') || part.includes('District') || part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street')) {
-                          continue;
-                        }
+                        
                         // 跳过国家
                         if (part === 'China' || part === '中国') {
                           continue;
                         }
                         
-                        // 检查是否已经找到城市
-                        if (!foundCity) {
-                          // 假设这是城市
-                          locationParts.unshift(part);
-                          foundCity = true;
-                        } else if (!foundProvince) {
-                          // 假设这是省份
-                          // 但如果已经有城市，就不再添加省份
-                          break;
+                        // 跳过区县、街道等信息
+                        if (part.includes('区') || part.includes('District') || part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street') || part.includes('号') || part.includes('No.')) {
+                          continue;
                         }
+                        
+                        // 跳过邮编
+                        if (/^\d+$/.test(part)) {
+                          continue;
+                        }
+                        
+                        // 找到第一个非区县、非街道、非国家的部分，假设是城市
+                        locationParts.push(part);
+                        break;
                       }
                     }
                   } else {
