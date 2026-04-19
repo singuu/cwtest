@@ -7,12 +7,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0a0a0a" />
   <title>ColorWalk</title>
-  <!-- vConsole 调试工具 -->
-  <script src="https://cdn.jsdelivr.net/npm/vconsole@3.15.1/dist/vconsole.min.js"></script>
-  <script>
-    // 初始化 vConsole
-    var vConsole = new VConsole();
-  </script>
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-9T62Y74DK9"></script>
   <script>
@@ -1805,113 +1799,124 @@ async function handleFile(file) {
                   
                   // 对于中国，只使用城市或省份（不包含区县）
                   if (country === 'China' || country === '中国') {
-                    // 尝试不同的字段名，确保能正确获取省份和城市
-                    var province = addr.province || addr.state || '';
-                    var city = addr.city || '';
-                    
-                    // 避免添加区县信息
-                    var validCity = '';
-                    var validProvince = '';
-                    
-                    if (city && !city.includes('区') && !city.includes('District')) {
-                      validCity = city;
-                    }
-                    if (province && !province.includes('区') && !province.includes('District')) {
-                      validProvince = province;
-                    }
-                    
-                    // 优先显示城市，如果没有城市再显示省份
-                    if (validCity) {
-                      locationParts.push(validCity);
-                    } else if (validProvince) {
-                      locationParts.push(validProvince);
-                    }
-                    
-                    // 特殊处理：如果没有省份和城市，尝试从display_name中提取
-                    if (locationParts.length === 0 && g.display_name) {
+                    // 先尝试从display_name中找城市，这样可以找到更具体的信息
+                    var foundFromDisplay = false;
+                    if (g.display_name) {
                       var displayName = g.display_name;
-                      // 尝试从display_name中提取城市
                       var parts = displayName.split(', ');
                       
-                      // 从后往前找，跳过国家、邮编、省份，找到城市
-                      var foundCity = false;
-                      var skippedProvince = false;
+                      console.log('从display_name提取城市信息，地址部分:', parts);
+                      
+                      // 从后往前找，跳过国家、邮编，找到第一个非区县、非街道的部分
+                      var firstValidPart = null;
+                      var firstValidIndex = -1;
                       
                       for (var i = parts.length - 1; i >= 0; i--) {
                         var part = parts[i].trim();
                         
+                        console.log('检查部分:', part, '索引:', i);
+                        
                         // 跳过国家
                         if (part === 'China' || part === '中国') {
+                          console.log('跳过国家:', part);
                           continue;
                         }
                         
                         // 跳过邮编
                         if (/^\d+$/.test(part)) {
+                          console.log('跳过邮编:', part);
                           continue;
                         }
                         
                         // 跳过区县
                         if (part.includes('区') || part.includes('District')) {
+                          console.log('跳过区县:', part);
                           continue;
                         }
                         
                         // 跳过街道、路等
                         if (part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street') || part.includes('号') || part.includes('No.')) {
+                          console.log('跳过街道:', part);
                           continue;
                         }
                         
                         // 跳过建筑物名称
                         if (i === 0) {
+                          console.log('跳过建筑物:', part);
                           continue;
                         }
                         
-                        // 如果还没有跳过省份，现在这个部分可能是省份，跳过它，继续往前找城市
-                        if (!skippedProvince) {
-                          skippedProvince = true;
-                          continue;
-                        }
-                        
-                        // 找到城市
-                        locationParts.push(part);
-                        foundCity = true;
+                        firstValidPart = part;
+                        firstValidIndex = i;
+                        console.log('找到第一个有效部分:', firstValidPart, '索引:', firstValidIndex);
                         break;
                       }
                       
-                      // 如果没有找到城市（可能是因为只有省份没有城市），尝试直接找城市
-                      if (!foundCity) {
-                        for (var j = parts.length - 1; j >= 0; j--) {
-                          var part = parts[j].trim();
+                      // 找到了第一个有效部分后，继续往前找城市
+                      var cityFromDisplay = firstValidPart;
+                      if (firstValidPart !== null) {
+                        for (var j = firstValidIndex - 1; j >= 0; j--) {
+                          var previousPart = parts[j].trim();
                           
-                          // 跳过国家
-                          if (part === 'China' || part === '中国') {
-                            continue;
-                          }
-                          
-                          // 跳过邮编
-                          if (/^\d+$/.test(part)) {
-                            continue;
-                          }
+                          console.log('继续往前找城市，检查部分:', previousPart, '索引:', j);
                           
                           // 跳过区县
-                          if (part.includes('区') || part.includes('District')) {
+                          if (previousPart.includes('区') || previousPart.includes('District')) {
+                            console.log('跳过区县:', previousPart);
                             continue;
                           }
                           
                           // 跳过街道、路等
-                          if (part.includes('路') || part.includes('Road') || part.includes('街') || part.includes('Street') || part.includes('号') || part.includes('No.')) {
+                          if (previousPart.includes('路') || previousPart.includes('Road') || previousPart.includes('街') || previousPart.includes('Street') || previousPart.includes('号') || previousPart.includes('No.')) {
+                            console.log('跳过街道:', previousPart);
                             continue;
                           }
                           
                           // 跳过建筑物名称
                           if (j === 0) {
+                            console.log('跳过建筑物:', previousPart);
                             continue;
                           }
                           
-                          // 找到城市或省份
-                          locationParts.push(part);
-                          foundCity = true;
+                          // 找到城市
+                          cityFromDisplay = previousPart;
+                          console.log('找到城市:', cityFromDisplay);
                           break;
                         }
+                      }
+                      
+                      // 使用从display_name找到的城市
+                      if (cityFromDisplay) {
+                        locationParts.push(cityFromDisplay);
+                        console.log('从display_name找到的城市:', cityFromDisplay);
+                        foundFromDisplay = true;
+                      }
+                    }
+                    
+                    // 如果从display_name没有找到，再尝试从addr.province和addr.city中获取
+                    if (!foundFromDisplay) {
+                      // 尝试不同的字段名，确保能正确获取省份和城市
+                      var province = addr.province || addr.state || '';
+                      var city = addr.city || '';
+                      
+                      // 避免添加区县信息
+                      var validCity = '';
+                      var validProvince = '';
+                      
+                      if (city && !city.includes('区') && !city.includes('District')) {
+                        validCity = city;
+                      }
+                      if (province && !province.includes('区') && !province.includes('District')) {
+                        validProvince = province;
+                      }
+                      
+                      // 优先显示城市，如果没有城市再显示省份
+                      if (validCity) {
+                        locationParts.push(validCity);
+                        console.log('从addr.city找到的城市:', validCity);
+                      } else if (validProvince) {
+                        locationParts.push(validProvince);
+                        console.log('从addr.province找到的省份:', validProvince);
                       }
                     }
                   } else {
@@ -3167,6 +3172,14 @@ var gradientPickerState = { start: null, end: null, activeTarget: 'start' };
       var pr = popover.getBoundingClientRect();
       if (pr.right > window.innerWidth - 8) {
         popover.style.left = (window.innerWidth - pr.width - 8) + 'px';
+      }
+      
+      // 检查是否超出屏幕底部，考虑底部导航栏
+      var windowHeight = window.innerHeight;
+      var bottomPadding = 80; // 底部导航栏高度 + 安全距离
+      if (pr.bottom > windowHeight - bottomPadding) {
+        // 向上显示
+        popover.style.top = (r.top - pr.height - 8) + 'px';
       }
     }, 0);
 
